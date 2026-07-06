@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Map — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles/main.css"/>
+  <script>tailwind.config={theme:{extend:{colors:{radar:{400:'#2dd6f5',500:'#08bbd9'},surface:{900:'#060d18',800:'#0b1628',700:'#0f2040',600:'#142b55',500:'#1a3668'}},fontFamily:{mono:['JetBrains Mono','monospace'],sans:['Inter','sans-serif'],display:['Space Grotesk','sans-serif']}}}}</script>
+  <style>
+    #globe-container { position:relative; width:100%; height:100%; overflow:hidden; background:radial-gradient(ellipse at 40% 40%, #0a1830 0%, #060d18 70%); }
+    #globe-canvas { display:block; width:100%!important; height:100%!important; }
+    .pin-tooltip { position:absolute; background:#0b1628ee; border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px 14px; font-size:11px; pointer-events:none; z-index:100; min-width:190px; display:none; backdrop-filter:blur(8px); }
+    .layer-btn.active { background:rgba(8,187,217,0.2); color:#2dd6f5; border-color:rgba(8,187,217,0.4); }
+    .ctrl-btn { transition:all .2s; }
+    .ctrl-btn:hover { background:rgba(255,255,255,0.1); }
+    #rotate-toggle.paused { border-color:rgba(245,158,11,0.5); color:#fcd34d; }
+  </style>
+</head>
+<body class="bg-surface-900 text-white font-sans flex flex-col h-screen overflow-hidden">
+
+  <!-- Top bar -->
+  <header class="flex-shrink-0 bg-surface-800 border-b border-white/10 px-4 py-2.5 flex items-center justify-between z-50">
+    <div class="flex items-center gap-4">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+        </div>
+        <span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span>
+      </a>
+      <nav class="hidden md:flex items-center gap-4 text-xs text-white/50">
+        <a href="dashboard.html" class="hover:text-white transition-colors">Command</a>
+        <a href="map.html" class="text-radar-400 font-medium">Globe Map</a>
+        <a href="alerts.html" class="hover:text-white transition-colors">Alerts</a>
+        <a href="analytics.html" class="hover:text-white transition-colors">Analytics</a>
+        <a href="reports.html" class="hover:text-white transition-colors">Reports</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="coords-display" class="font-mono text-xs text-white/40 hidden md:block">Lat — · Lng —</div>
+      <div class="font-mono text-xs text-white/60">PKT <span id="live-clock" class="text-white"></span></div>
+      <span class="badge-active text-xs px-2 py-1 rounded-full font-mono">Sentinel-1 · 03:51 PKT</span>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Left sidebar -->
+    <div class="w-64 flex-shrink-0 bg-surface-800 border-r border-white/10 overflow-y-auto flex flex-col">
+
+      <!-- Globe controls -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">GLOBE CONTROLS</div>
+        <div class="space-y-2">
+          <button id="rotate-toggle" onclick="toggleRotation()" class="ctrl-btn w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left text-white/70">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Auto-rotate: ON
+          </button>
+          <button onclick="flyToIncident()" class="ctrl-btn w-full flex items-center gap-2 border border-radar-500/40 bg-radar-500/10 rounded-lg px-3 py-2 text-xs text-left text-radar-400">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Fly to Incident (Sindh)
+          </button>
+          <button onclick="flyToLocation('global')" class="ctrl-btn w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left text-white/70">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/></svg>
+            Global view
+          </button>
+        </div>
+
+        <!-- Speed control -->
+        <div class="mt-3">
+          <div class="text-xs text-white/30 mb-1.5">Rotation speed</div>
+          <input type="range" id="speed-slider" min="0.1" max="3" step="0.1" value="0.8" class="w-full accent-radar-500" oninput="setSpeed(this.value)"/>
+          <div class="flex justify-between text-xs text-white/20 mt-0.5"><span>Slow</span><span>Fast</span></div>
+        </div>
+      </div>
+
+      <!-- Jump to location -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">JUMP TO LOCATION</div>
+        <div class="space-y-1.5">
+          <button onclick="flyToLocation('sindh')"    class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Sindh, Pakistan</span><span class="font-mono text-white/30">25.4°N 68.4°E</span></button>
+          <button onclick="flyToLocation('dhaka')"    class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Dhaka, Bangladesh</span><span class="font-mono text-white/30">23.7°N 90.4°E</span></button>
+          <button onclick="flyToLocation('jakarta')"  class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Jakarta, Indonesia</span><span class="font-mono text-white/30">6.2°S 106.8°E</span></button>
+          <button onclick="flyToLocation('houston')"  class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Houston, USA</span><span class="font-mono text-white/30">29.7°N 95.4°W</span></button>
+          <button onclick="flyToLocation('nigeria')"  class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Niger Delta</span><span class="font-mono text-white/30">5.0°N 6.0°E</span></button>
+          <button onclick="flyToLocation('amazon')"   class="ctrl-btn w-full text-left text-xs px-2.5 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white flex items-center justify-between"><span>📍 Amazon Basin</span><span class="font-mono text-white/30">3.0°S 60.0°W</span></button>
+        </div>
+      </div>
+
+      <!-- Layer toggles -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">GLOBE LAYERS</div>
+        <div class="space-y-2">
+          <button class="layer-btn active w-full flex items-center gap-2 border border-radar-500/40 text-radar-400 bg-radar-500/10 rounded-lg px-3 py-2 text-xs text-left" onclick="toggleLayer(this,'flood')">
+            <div class="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"></div>Flood zones
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left hover:border-white/40" onclick="toggleLayer(this,'distress')">
+            <div class="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0"></div>Distress signals
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left hover:border-white/40" onclick="toggleLayer(this,'resources')">
+            <div class="w-2.5 h-2.5 rounded bg-blue-500 flex-shrink-0"></div>Resources
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left hover:border-white/40" onclick="toggleLayer(this,'global_floods')">
+            <div class="w-2.5 h-2.5 rounded-full bg-purple-400 flex-shrink-0"></div>Global flood events
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left hover:border-white/40" onclick="toggleLayer(this,'atmosphere')">
+            <div class="w-2.5 h-2.5 rounded-full bg-radar-400/60 flex-shrink-0"></div>Atmosphere glow
+          </button>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="p-4">
+        <div class="text-xs text-white/40 font-mono mb-3">LEGEND</div>
+        <div class="space-y-2 text-xs text-white/60">
+          <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500/80 flex-shrink-0"></div>Active incident (critical)</div>
+          <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-400/80 flex-shrink-0"></div>Distress signal</div>
+          <div class="flex items-center gap-2"><div class="w-3 h-3 rounded bg-blue-500/80 flex-shrink-0"></div>Rescue resource</div>
+          <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-purple-400/80 flex-shrink-0"></div>Historical flood zone</div>
+          <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-white/20 flex-shrink-0"></div>Drag to rotate globe</div>
+        </div>
+        <div class="mt-4 text-xs text-white/30 leading-relaxed">
+          Click any marker for details.<br/>Drag globe to rotate manually.<br/>Scroll to zoom in/out.
+        </div>
+      </div>
+    </div>
+
+    <!-- Globe area -->
+    <div class="flex-1 relative overflow-hidden">
+      <div id="globe-container">
+        <canvas id="globe-canvas"></canvas>
+      </div>
+
+      <!-- Tooltip -->
+      <div id="pin-tooltip" class="pin-tooltip"></div>
+
+      <!-- Model overlay -->
+      <div class="absolute top-4 right-4 bg-surface-800/90 border border-white/10 rounded-xl p-3 text-xs max-w-xs backdrop-blur-sm">
+        <div class="font-mono text-radar-400 mb-2">ACTIVE INCIDENT</div>
+        <div class="space-y-1">
+          <div class="flex justify-between gap-4"><span class="text-white/50">Location:</span><span class="font-mono text-right">25.41°N, 68.37°E</span></div>
+          <div class="flex justify-between gap-4"><span class="text-white/50">Region:</span><span>Sindh, Pakistan</span></div>
+          <div class="flex justify-between gap-4"><span class="text-white/50">At risk:</span><span class="text-amber-400 font-mono">81,500</span></div>
+          <div class="flex justify-between gap-4"><span class="text-white/50">Flood map:</span><span class="text-green-400 font-mono">0.89 IoU</span></div>
+          <div class="flex justify-between gap-4"><span class="text-white/50">Signals:</span><span class="text-red-400 font-mono">47 active</span></div>
+        </div>
+      </div>
+
+      <!-- Bottom info bar -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-surface-800/90 border border-white/10 rounded-full px-5 py-2 text-xs font-mono text-white/50 backdrop-blur-sm flex items-center gap-4">
+        <span>🌍 Global flood monitoring active</span>
+        <span class="text-white/20">|</span>
+        <span id="visible-markers">Loading markers…</span>
+        <span class="text-white/20">|</span>
+        <span>Drag · Scroll to zoom</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+  <script>
+  (function() {
+    // ── Globals ────────────────────────────────────────────────────────
+    let scene, camera, renderer, globe, atmosphere, cloudMesh;
+    let isRotating = true;
+    let rotationSpeed = 0.0008;
+    let targetRotY = 0, currentRotY = 0;
+    let targetRotX = 0, currentRotX = 0;
+    let isDragging = false, prevMouse = {x:0,y:0};
+    let pinMeshes = [], animFrame;
+    let layers = { flood:true, distress:true, resources:true, global_floods:true, atmosphere:true };
+    let zoomLevel = 2.4;
+    const RADIUS = 1.0;
+    const S = window.SIM;
+
+    // ── Coordinate converter ──────────────────────────────────────────
+    function latLngToVec3(lat, lng, r) {
+      const phi   = (90 - lat) * Math.PI / 180;
+      const theta = (lng + 180) * Math.PI / 180;
+      return new THREE.Vector3(
+        -r * Math.sin(phi) * Math.cos(theta),
+         r * Math.cos(phi),
+         r * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    // ── All pins ──────────────────────────────────────────────────────
+    const PIN_DATA = [
+      // Active incident blocks
+      ...S.censusBlocks.map(b => ({
+        lat: b.lat, lng: b.lng, type:'flood', color: b.vuln>75?0xef4444:b.vuln>50?0xf59e0b:0x22c55e,
+        label: b.name, detail:`Status: ${b.status} · Pop: ${b.pop.toLocaleString()} · Vuln: ${b.vuln}/100 · Depth: ${b.floodDepth}m`, size:0.022
+      })),
+      // Distress signals
+      ...S.distressSignals.map(d => ({
+        lat: d.lat, lng: d.lng, type:'distress', color: d.responded?0x22c55e:0xf59e0b,
+        label:`Distress Signal — ${d.severity}`, detail:`"${d.text.substring(0,60)}…" · ${d.platform} · ${Math.round(d.confidence*100)}% conf`, size:0.016
+      })),
+      // Resources
+      ...S.resources.map(r => ({
+        lat: r.lat, lng: r.lng, type:'resources', color:0x3b82f6,
+        label: r.unit, detail:`${r.type} · ${r.sector} · ${r.status}${r.eta?' · ETA '+r.eta:''}`, size:0.015
+      })),
+      // Global historical flood zones
+      { lat:23.8, lng:90.4,  type:'global_floods', color:0xa78bfa, label:'Bangladesh Floods 2024', detail:'Annual monsoon flooding — 5.4M affected', size:0.028 },
+      { lat:15.5, lng:32.5,  type:'global_floods', color:0xa78bfa, label:'Sudan Floods 2024',      detail:'Nile basin overflow — 300k displaced', size:0.022 },
+      { lat:29.7, lng:-95.4, type:'global_floods', color:0xa78bfa, label:'Houston Harvey 2017',    detail:'Category 4 · $125B damage', size:0.025 },
+      { lat:5.0,  lng:6.0,   type:'global_floods', color:0xa78bfa, label:'Niger Delta Floods',     detail:'Annual flooding — 600k affected', size:0.022 },
+      { lat:-3.0, lng:-60.0, type:'global_floods', color:0xa78bfa, label:'Amazon Basin 2021',      detail:'Record flooding — 400k affected', size:0.024 },
+      { lat:6.2,  lng:106.8, type:'global_floods', color:0xa78bfa, label:'Jakarta Floods 2020',    detail:'Annual flooding · sea level rise risk', size:0.022 },
+      { lat:30.5, lng:114.3, type:'global_floods', color:0xa78bfa, label:'Wuhan Yangtze 2020',     detail:'Record Yangtze levels', size:0.021 },
+      { lat:51.5, lng:-0.1,  type:'global_floods', color:0xa78bfa, label:'London Thames Barrier',  detail:'Active flood defence', size:0.018 },
+    ];
+
+    // ── Init Three.js ─────────────────────────────────────────────────
+    function init() {
+      const container = document.getElementById('globe-container');
+      const canvas    = document.getElementById('globe-canvas');
+
+      scene    = new THREE.Scene();
+      camera   = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      camera.position.set(0, 0, zoomLevel);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setClearColor(0x000000, 0);
+
+      // ── Starfield ──────────────────────────────────────────────────
+      const starGeo = new THREE.BufferGeometry();
+      const starPos = [];
+      for (let i = 0; i < 2000; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi   = Math.acos(2 * Math.random() - 1);
+        const r     = 40 + Math.random() * 20;
+        starPos.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+      }
+      starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+      scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0xffffff, size:0.06, transparent:true, opacity:0.7 })));
+
+      // ── Globe ──────────────────────────────────────────────────────
+      const globeGeo = new THREE.SphereGeometry(RADIUS, 64, 64);
+      const globeMat = new THREE.MeshPhongMaterial({
+        color: 0x0d3b6e, emissive: 0x051020, specular: 0x1a6eb5,
+        shininess: 25, transparent: false
+      });
+      globe = new THREE.Mesh(globeGeo, globeMat);
+      scene.add(globe);
+
+      // Land masses (procedural latitude bands)
+      buildLandMasses();
+
+      // ── Atmosphere ─────────────────────────────────────────────────
+      const atmGeo = new THREE.SphereGeometry(RADIUS * 1.08, 32, 32);
+      const atmMat = new THREE.MeshPhongMaterial({
+        color: 0x0088cc, transparent: true, opacity: 0.12, side: THREE.FrontSide
+      });
+      atmosphere = new THREE.Mesh(atmGeo, atmMat);
+      scene.add(atmosphere);
+
+      // Atmosphere rim glow
+      const glowGeo = new THREE.SphereGeometry(RADIUS * 1.15, 32, 32);
+      const glowMat = new THREE.MeshPhongMaterial({
+        color: 0x00aaff, transparent: true, opacity: 0.04, side: THREE.BackSide
+      });
+      scene.add(new THREE.Mesh(glowGeo, glowMat));
+
+      // Grid lines (lat/lng)
+      buildGridLines();
+
+      // ── Lights ─────────────────────────────────────────────────────
+      const sun  = new THREE.DirectionalLight(0xffffff, 1.1);
+      sun.position.set(5, 3, 5);
+      scene.add(sun);
+      scene.add(new THREE.AmbientLight(0x1a3050, 1.8));
+      const fill = new THREE.DirectionalLight(0x0044aa, 0.4);
+      fill.position.set(-5, -2, -3);
+      scene.add(fill);
+
+      // ── Pins ───────────────────────────────────────────────────────
+      buildPins();
+
+      // ── Start at Sindh ─────────────────────────────────────────────
+      setGlobeRotation(25.41, 68.37, false);
+
+      // ── Animate ────────────────────────────────────────────────────
+      animate();
+
+      // ── Events ─────────────────────────────────────────────────────
+      window.addEventListener('resize', onResize);
+      canvas.addEventListener('mousedown',  onMouseDown);
+      canvas.addEventListener('mousemove',  onMouseMove);
+      canvas.addEventListener('mouseup',    onMouseUp);
+      canvas.addEventListener('mouseleave', onMouseUp);
+      canvas.addEventListener('wheel',      onWheel, { passive:true });
+      canvas.addEventListener('touchstart', onTouchStart, { passive:true });
+      canvas.addEventListener('touchmove',  onTouchMove,  { passive:false });
+      canvas.addEventListener('touchend',   () => isDragging = false);
+    }
+
+    // ── Land masses ───────────────────────────────────────────────────
+    function buildLandMasses() {
+      // Simplified continent outlines as sphere patches
+      const continents = [
+        // Europe/Asia band
+        { lat:50, lng:20,  size:0.18, color:0x1a5e3a },
+        { lat:40, lng:80,  size:0.20, color:0x1a5e3a },
+        { lat:30, lng:50,  size:0.14, color:0x2d4a20 },
+        { lat:55, lng:80,  size:0.22, color:0x1a5e3a },
+        { lat:60, lng:100, size:0.18, color:0x1a5e3a },
+        { lat:35, lng:135, size:0.12, color:0x1a5e3a },
+        // Africa
+        { lat:10, lng:20,  size:0.22, color:0x2a5a25 },
+        { lat:-10,lng:25,  size:0.18, color:0x2a5a25 },
+        // Americas
+        { lat:40, lng:-100,size:0.22, color:0x1e5530 },
+        { lat:20, lng:-100,size:0.16, color:0x1e5530 },
+        { lat:-15,lng:-55, size:0.22, color:0x205a28 },
+        // SE Asia / Oceania
+        { lat:-25,lng:135, size:0.16, color:0x2a5020 },
+        { lat:5,  lng:115, size:0.10, color:0x1e5530 },
+        // Pakistan / Sindh highlight
+        { lat:27, lng:67,  size:0.07, color:0x2a4a1a },
+        { lat:25, lng:69,  size:0.06, color:0x2a4a1a },
+      ];
+      continents.forEach(c => {
+        const geo = new THREE.SphereGeometry(RADIUS * 1.001, 16, 16);
+        const mat = new THREE.MeshPhongMaterial({ color: c.color, transparent:true, opacity:0.85 });
+        const mesh = new THREE.Mesh(geo, mat);
+        // Scale to patch
+        const s = c.size;
+        mesh.scale.set(s * 1.5, s, s * 1.5);
+        const v = latLngToVec3(c.lat, c.lng, 1);
+        mesh.position.copy(v);
+        mesh.lookAt(new THREE.Vector3(0,0,0));
+        globe.add(mesh);
+      });
+
+      // Sindh flood highlight
+      const floodGeo = new THREE.SphereGeometry(RADIUS * 1.003, 12, 12);
+      const floodMat = new THREE.MeshPhongMaterial({ color:0xef4444, transparent:true, opacity:0.35, emissive:0x660000 });
+      const floodMesh = new THREE.Mesh(floodGeo, floodMat);
+      floodMesh.scale.set(0.055, 0.04, 0.055);
+      const sindhV = latLngToVec3(25.41, 68.37, 1);
+      floodMesh.position.copy(sindhV);
+      floodMesh.lookAt(new THREE.Vector3(0,0,0));
+      floodMesh.userData = { type:'flood_patch' };
+      globe.add(floodMesh);
+    }
+
+    // ── Grid lines ────────────────────────────────────────────────────
+    function buildGridLines() {
+      const mat = new THREE.LineBasicMaterial({ color:0x1a4060, transparent:true, opacity:0.35 });
+      // Latitude lines
+      for (let lat = -60; lat <= 60; lat += 30) {
+        const pts = [];
+        for (let lng = 0; lng <= 360; lng += 4) {
+          pts.push(latLngToVec3(lat, lng - 180, RADIUS * 1.001));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        globe.add(new THREE.Line(geo, mat));
+      }
+      // Longitude lines
+      for (let lng = 0; lng < 360; lng += 30) {
+        const pts = [];
+        for (let lat = -90; lat <= 90; lat += 4) {
+          pts.push(latLngToVec3(lat, lng - 180, RADIUS * 1.001));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        globe.add(new THREE.Line(geo, mat));
+      }
+    }
+
+    // ── Pins ──────────────────────────────────────────────────────────
+    function buildPins() {
+      pinMeshes.forEach(m => globe.remove(m));
+      pinMeshes = [];
+
+      PIN_DATA.forEach((p, idx) => {
+        if (!layers[p.type]) return;
+
+        const pos = latLngToVec3(p.lat, p.lng, RADIUS);
+
+        // Spike
+        const spikeGeo = new THREE.CylinderGeometry(0.003, 0.001, 0.06, 6);
+        const spikeMat = new THREE.MeshPhongMaterial({ color: p.color, emissive: p.color, emissiveIntensity:0.4 });
+        const spike    = new THREE.Mesh(spikeGeo, spikeMat);
+
+        // Head sphere
+        const headGeo  = new THREE.SphereGeometry(p.size, 12, 12);
+        const headMat  = new THREE.MeshPhongMaterial({ color: p.color, emissive: p.color, emissiveIntensity:0.6, transparent:true, opacity:0.95 });
+        const head     = new THREE.Mesh(headGeo, headMat);
+
+        // Ring (pulsing)
+        const ringGeo  = new THREE.RingGeometry(p.size * 1.3, p.size * 1.8, 20);
+        const ringMat  = new THREE.MeshBasicMaterial({ color: p.color, transparent:true, opacity:0.4, side:THREE.DoubleSide });
+        const ring     = new THREE.Mesh(ringGeo, ringMat);
+
+        // Group
+        const group = new THREE.Group();
+        group.add(spike);
+        group.add(head);
+        group.add(ring);
+
+        // Position on globe surface
+        group.position.copy(pos);
+        group.lookAt(new THREE.Vector3(0,0,0));
+        group.rotateX(Math.PI / 2); // align spike outward
+
+        // Offset head and ring
+        head.position.set(0,  0.055, 0);
+        ring.position.set(0,  0.055, 0);
+        spike.position.set(0, 0.028, 0);
+
+        group.userData = { pinData: p, headMesh: head, ringMesh: ring, idx, baseColor: p.color };
+        globe.add(group);
+        pinMeshes.push(group);
+      });
+
+      document.getElementById('visible-markers').textContent =
+        `${pinMeshes.length} markers visible`;
+    }
+
+    // ── Animation loop ────────────────────────────────────────────────
+    let pulse = 0;
+    function animate() {
+      animFrame = requestAnimationFrame(animate);
+      pulse += 0.03;
+
+      // Auto-rotate
+      if (isRotating) {
+        globe.rotation.y += rotationSpeed;
+        atmosphere.rotation.y += rotationSpeed * 0.7;
+      }
+
+      // Smooth manual rotation
+      globe.rotation.y += (targetRotY - globe.rotation.y) * 0.08;
+      globe.rotation.x += (targetRotX - globe.rotation.x) * 0.08;
+
+      // Pulse pins
+      pinMeshes.forEach((g, i) => {
+        if (!g.userData.ringMesh) return;
+        const s = 1 + 0.25 * Math.sin(pulse + i * 0.8);
+        g.userData.ringMesh.scale.set(s, s, 1);
+        g.userData.ringMesh.material.opacity = 0.15 + 0.25 * (1 - (s - 1) / 0.25);
+        // Head bob
+        if (g.userData.headMesh) {
+          g.userData.headMesh.position.y = 0.055 + 0.004 * Math.sin(pulse + i);
+        }
+      });
+
+      // Atmosphere pulse
+      if (layers.atmosphere && atmosphere) {
+        atmosphere.material.opacity = 0.10 + 0.03 * Math.sin(pulse * 0.5);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // ── Set rotation to lat/lng ───────────────────────────────────────
+    function setGlobeRotation(lat, lng, animated = true) {
+      const newRotY = -lng * Math.PI / 180;
+      const newRotX = -lat * Math.PI / 180 * 0.5;
+      if (animated) {
+        targetRotY = newRotY;
+        targetRotX = newRotX;
+      } else {
+        globe.rotation.y = newRotY;
+        globe.rotation.x = newRotX;
+        targetRotY = newRotY;
+        targetRotX = newRotX;
+      }
+    }
+
+    // ── Fly-to locations ──────────────────────────────────────────────
+    const LOCATIONS = {
+      sindh:   { lat:25.41, lng:68.37  },
+      dhaka:   { lat:23.8,  lng:90.4   },
+      jakarta: { lat:-6.2,  lng:106.8  },
+      houston: { lat:29.7,  lng:-95.4  },
+      nigeria: { lat:5.0,   lng:6.0    },
+      amazon:  { lat:-3.0,  lng:-60.0  },
+      global:  { lat:20,    lng:0      },
+    };
+
+    window.flyToLocation = (key) => {
+      const loc = LOCATIONS[key];
+      if (!loc) return;
+      isRotating = false;
+      document.getElementById('rotate-toggle').textContent = '↺  Auto-rotate: OFF';
+      document.getElementById('rotate-toggle').classList.add('paused');
+      setGlobeRotation(loc.lat, loc.lng, true);
+      // Zoom in slightly
+      if (key !== 'global') {
+        zoomTo(2.0);
+      } else {
+        zoomTo(2.6);
+      }
+    };
+
+    window.flyToIncident = () => flyToLocation('sindh');
+
+    function zoomTo(z) {
+      const start = camera.position.z;
+      const end   = z;
+      const steps = 30;
+      let i = 0;
+      const interval = setInterval(() => {
+        i++;
+        camera.position.z = start + (end - start) * (i / steps);
+        if (i >= steps) clearInterval(interval);
+      }, 16);
+    }
+
+    // ── Controls ──────────────────────────────────────────────────────
+    window.toggleRotation = () => {
+      isRotating = !isRotating;
+      const btn = document.getElementById('rotate-toggle');
+      btn.innerHTML = isRotating
+        ? `<svg class="w-3.5 h-3.5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Auto-rotate: ON`
+        : `<svg class="w-3.5 h-3.5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Auto-rotate: OFF`;
+      btn.classList.toggle('paused', !isRotating);
+    };
+
+    window.setSpeed = (v) => { rotationSpeed = v * 0.001; };
+
+    window.toggleLayer = (btn, layer) => {
+      layers[layer] = !layers[layer];
+      btn.classList.toggle('active', layers[layer]);
+      if (layer === 'atmosphere') {
+        atmosphere.visible = layers[layer];
+      } else {
+        buildPins();
+      }
+    };
+
+    // ── Mouse/touch interaction ────────────────────────────────────────
+    function onMouseDown(e) {
+      isDragging = true;
+      isRotating = false;
+      prevMouse  = { x: e.clientX, y: e.clientY };
+      document.getElementById('rotate-toggle').innerHTML =
+        `<svg class="w-3.5 h-3.5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Auto-rotate: OFF`;
+    }
+
+    function onMouseMove(e) {
+      const rect    = renderer.domElement.getBoundingClientRect();
+      const mouseX  = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      const mouseY  = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Drag to rotate
+      if (isDragging) {
+        const dx = e.clientX - prevMouse.x;
+        const dy = e.clientY - prevMouse.y;
+        targetRotY = globe.rotation.y + dx * 0.008;
+        targetRotX = Math.max(-0.6, Math.min(0.6, globe.rotation.x + dy * 0.005));
+        globe.rotation.y = targetRotY;
+        globe.rotation.x = targetRotX;
+        prevMouse = { x: e.clientX, y: e.clientY };
+      }
+
+      // Hover detection via raycasting
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera({ x: mouseX, y: mouseY }, camera);
+      const heads = pinMeshes.map(g => g.userData.headMesh).filter(Boolean);
+      const hits  = raycaster.intersectObjects(heads);
+      const tooltip = document.getElementById('pin-tooltip');
+
+      if (hits.length > 0) {
+        const hitHead = hits[0].object;
+        const group   = pinMeshes.find(g => g.userData.headMesh === hitHead);
+        if (group) {
+          const p = group.userData.pinData;
+          tooltip.style.display = 'block';
+          tooltip.style.left    = (e.clientX - rect.left + 14) + 'px';
+          tooltip.style.top     = (e.clientY - rect.top  - 20) + 'px';
+          const typeColor = p.type==='flood'?'text-red-400':p.type==='distress'?'text-amber-400':p.type==='resources'?'text-blue-400':'text-purple-400';
+          tooltip.innerHTML = `
+            <div class="font-semibold ${typeColor} mb-1">${p.label}</div>
+            <div class="text-white/60 text-xs leading-relaxed">${p.detail}</div>
+            <div class="text-white/30 text-xs mt-1.5 font-mono">${p.lat.toFixed(3)}°${p.lat>=0?'N':'S'}, ${Math.abs(p.lng).toFixed(3)}°${p.lng>=0?'E':'W'}</div>`;
+          renderer.domElement.style.cursor = 'pointer';
+        }
+      } else {
+        tooltip.style.display = 'none';
+        renderer.domElement.style.cursor = 'grab';
+      }
+
+      // Update coords display
+      const coordEl = document.getElementById('coords-display');
+      if (coordEl) {
+        // Approximate lat/lng from mouse on sphere
+        const approxLng = (((-globe.rotation.y + mouseX * 0.8) * 180 / Math.PI) % 360 + 360) % 360 - 180;
+        const approxLat = -mouseY * 60;
+        coordEl.textContent = `${approxLat.toFixed(1)}°${approxLat>=0?'N':'S'} ${Math.abs(approxLng).toFixed(1)}°${approxLng>=0?'E':'W'}`;
+      }
+    }
+
+    function onMouseUp() {
+      isDragging = false;
+    }
+
+    function onWheel(e) {
+      zoomLevel = Math.max(1.4, Math.min(4.0, zoomLevel + e.deltaY * 0.002));
+      camera.position.z = zoomLevel;
+    }
+
+    let touchStart = null;
+    function onTouchStart(e) {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        isRotating = false;
+        touchStart  = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    }
+    function onTouchMove(e) {
+      if (!isDragging || e.touches.length !== 1) return;
+      e.preventDefault();
+      const dx = e.touches[0].clientX - touchStart.x;
+      const dy = e.touches[0].clientY - touchStart.y;
+      targetRotY = globe.rotation.y + dx * 0.008;
+      targetRotX = Math.max(-0.6, Math.min(0.6, globe.rotation.x + dy * 0.005));
+      globe.rotation.y = targetRotY;
+      globe.rotation.x = targetRotX;
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+
+    function onResize() {
+      const c = document.getElementById('globe-container');
+      camera.aspect = c.clientWidth / c.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(c.clientWidth, c.clientHeight);
+    }
+
+    // ── Boot ──────────────────────────────────────────────────────────
+    init();
+  })();
+  </script>
+</body>
+</html>
