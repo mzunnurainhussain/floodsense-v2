@@ -1,0 +1,158 @@
+/* FloodSense AI — Main Styles */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body { font-family: 'Inter', sans-serif; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #060d18; }
+::-webkit-scrollbar-thumb { background: #1a3668; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #08bbd9; }
+
+/* Animated radar grid background */
+#bg-grid {
+  background-image:
+    linear-gradient(rgba(8,187,217,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8,187,217,0.07) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: gridScroll 20s linear infinite;
+}
+@keyframes gridScroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 48px 48px; }
+}
+
+/* Sidebar active state */
+.sidebar-link.active {
+  background: rgba(8,187,217,0.12);
+  color: #2dd6f5;
+  border-right: 2px solid #08bbd9;
+}
+.sidebar-link:hover { background: rgba(255,255,255,0.05); }
+
+/* Status badges */
+.badge-critical { background: rgba(124,58,237,0.2); color: #a78bfa; border: 1px solid rgba(124,58,237,0.4); }
+.badge-high { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+.badge-medium { background: rgba(245,158,11,0.2); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
+.badge-low { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+.badge-active { background: rgba(8,187,217,0.2); color: #67e8f9; border: 1px solid rgba(8,187,217,0.4); }
+
+/* Pulse ring animation for alerts */
+@keyframes pulseRing {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+.alert-pulse { animation: pulseRing 2s ease-out infinite; }
+
+/* Gauge chart */
+.gauge-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+  position: relative;
+}
+
+/* Card hover glow */
+.feature-card:hover { box-shadow: 0 0 30px rgba(8,187,217,0.08); }
+
+/* Map placeholder */
+.map-container {
+  background: radial-gradient(ellipse at center, #0f2040 0%, #060d18 70%);
+  position: relative;
+  overflow: hidden;
+}
+.map-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(8,187,217,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8,187,217,0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Flood zone overlay */
+.flood-zone {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(20px);
+  animation: floodPulse 4s ease-in-out infinite;
+}
+@keyframes floodPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Chart bars */
+.chart-bar {
+  border-radius: 4px 4px 0 0;
+  transition: opacity 0.2s;
+}
+.chart-bar:hover { opacity: 0.8; }
+
+/* Data stream indicator */
+.stream-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  animation: streamBlink 1.5s ease-in-out infinite;
+}
+@keyframes streamBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Vulnerability score bar */
+.vuln-bar { transition: width 0.8s ease-out; }
+
+/* NIMS color compliance indicators */
+.nims-red { background: #d32f2f; }
+.nims-orange { background: #f57c00; }
+.nims-yellow { background: #fbc02d; }
+.nims-green { background: #388e3c; }
+
+/* Model confidence band */
+.confidence-band {
+  background: rgba(8,187,217,0.08);
+  border: 1px dashed rgba(8,187,217,0.3);
+  border-radius: 4px;
+}
+
+/* Print / export styles */
+@media print {
+  nav, .no-print { display: none !important; }
+  body { background: white; color: black; }
+  .print-section { page-break-inside: avoid; }
+}
+
+/* Responsive sidebar */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+  .sidebar.open { transform: translateX(0); }
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+}
+.tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 100%; left: 50%;
+  transform: translateX(-50%);
+  background: #0f2040;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  margin-bottom: 4px;
+}
+.tooltip:hover::after { opacity: 1; }
