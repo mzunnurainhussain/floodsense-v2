@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Map — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles/main.css" />
+  <script>tailwind.config={theme:{extend:{colors:{radar:{400:'#2dd6f5',500:'#08bbd9'},flood:{400:'#60a5fa',500:'#3b82f6'},surface:{900:'#060d18',800:'#0b1628',700:'#0f2040',600:'#142b55',500:'#1a3668'}},fontFamily:{mono:['JetBrains Mono','monospace'],sans:['Inter','sans-serif'],display:['Space Grotesk','sans-serif']}}}}</script>
+  <style>
+    #map-canvas { cursor: crosshair; }
+    .map-tooltip { position: absolute; background: #0b1628; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 14px; font-size: 12px; pointer-events: none; z-index: 100; min-width: 180px; display: none; }
+    .layer-btn.active { background: rgba(8,187,217,0.2); color: #2dd6f5; border-color: rgba(8,187,217,0.4); }
+  </style>
+</head>
+<body class="bg-surface-900 text-white font-sans flex flex-col h-screen overflow-hidden">
+
+  <!-- Top bar -->
+  <header class="flex-shrink-0 bg-surface-800 border-b border-white/10 px-4 py-2.5 flex items-center justify-between z-50">
+    <div class="flex items-center gap-4">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg></div>
+        <span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span>
+      </a>
+      <nav class="hidden md:flex items-center gap-4 text-xs text-white/50">
+        <a href="dashboard.html" class="hover:text-white">Command</a>
+        <a href="map.html" class="text-radar-400 font-medium">Map</a>
+        <a href="alerts.html" class="hover:text-white">Alerts</a>
+        <a href="analytics.html" class="hover:text-white">Analytics</a>
+        <a href="reports.html" class="hover:text-white">Reports</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="font-mono text-xs text-white/60">PKT <span id="live-clock" class="text-white"></span></div>
+      <span class="badge-active text-xs px-2 py-1 rounded-full font-mono">Sentinel-1 · 03:51 PKT</span>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Map controls sidebar -->
+    <div class="w-64 flex-shrink-0 bg-surface-800 border-r border-white/10 overflow-y-auto flex flex-col">
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">MAP LAYERS</div>
+        <div class="space-y-2">
+          <button class="layer-btn active w-full flex items-center gap-2 border border-radar-500/40 text-radar-400 bg-radar-500/10 rounded-lg px-3 py-2 text-xs text-left transition-all" onclick="toggleLayer(this,'flood')">
+            <div class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>Flood Inundation (U-Net)
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left transition-all hover:border-white/40" onclick="toggleLayer(this,'distress')">
+            <div class="w-3 h-3 rounded-full bg-amber-400 flex-shrink-0"></div>Distress Signals
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left transition-all hover:border-white/40" onclick="toggleLayer(this,'resources')">
+            <div class="w-3 h-3 rounded bg-blue-500 flex-shrink-0"></div>Resources
+          </button>
+          <button class="layer-btn active w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left transition-all hover:border-white/40" onclick="toggleLayer(this,'vulnerability')">
+            <div class="w-3 h-3 rounded-full bg-purple-500 flex-shrink-0"></div>Vulnerability Scores
+          </button>
+          <button class="layer-btn w-full flex items-center gap-2 border border-white/20 rounded-lg px-3 py-2 text-xs text-left transition-all hover:border-white/40" onclick="toggleLayer(this,'gauges')">
+            <div class="w-3 h-3 rounded-full bg-green-400 flex-shrink-0"></div>Stream Gauges
+          </button>
+        </div>
+      </div>
+
+      <!-- Flood depth legend -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">FLOOD DEPTH</div>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2"><div class="w-4 h-3 rounded-sm bg-red-600/80"></div><span class="text-xs text-white/60">&gt;1.5m — Extreme</span></div>
+          <div class="flex items-center gap-2"><div class="w-4 h-3 rounded-sm bg-red-400/80"></div><span class="text-xs text-white/60">1.0–1.5m — Severe</span></div>
+          <div class="flex items-center gap-2"><div class="w-4 h-3 rounded-sm bg-amber-500/80"></div><span class="text-xs text-white/60">0.5–1.0m — Moderate</span></div>
+          <div class="flex items-center gap-2"><div class="w-4 h-3 rounded-sm bg-yellow-400/80"></div><span class="text-xs text-white/60">0.1–0.5m — Minor</span></div>
+          <div class="flex items-center gap-2"><div class="w-4 h-3 rounded-sm bg-blue-400/20 border border-blue-400/30"></div><span class="text-xs text-white/60">Forecast zone</span></div>
+        </div>
+      </div>
+
+      <!-- Active census blocks -->
+      <div class="p-4">
+        <div class="text-xs text-white/40 font-mono mb-3">AFFECTED SECTORS</div>
+        <div id="sector-list" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- Map canvas area -->
+    <div class="flex-1 relative overflow-hidden bg-surface-900">
+      <canvas id="map-canvas" class="w-full h-full"></canvas>
+      <div id="map-tooltip" class="map-tooltip"></div>
+
+      <!-- Model info overlay -->
+      <div class="absolute top-4 right-4 bg-surface-800/90 border border-white/10 rounded-xl p-3 text-xs max-w-xs backdrop-blur-sm">
+        <div class="font-mono text-radar-400 mb-2">AI MODEL STATUS</div>
+        <div class="space-y-1.5">
+          <div class="flex justify-between"><span class="text-white/50">Model:</span><span class="font-mono">U-Net CNN</span></div>
+          <div class="flex justify-between"><span class="text-white/50">Training:</span><span class="font-mono">Sen1Floods11</span></div>
+          <div class="flex justify-between"><span class="text-white/50">Accuracy:</span><span class="font-mono text-green-400">0.89 IoU</span></div>
+          <div class="flex justify-between"><span class="text-white/50">Input:</span><span class="font-mono">Sentinel-1 SAR</span></div>
+          <div class="flex justify-between"><span class="text-white/50">Inference:</span><span class="font-mono text-radar-400">&lt;90 seconds</span></div>
+          <div class="flex justify-between"><span class="text-white/50">Confidence:</span><span class="font-mono text-green-400">94.2%</span></div>
+        </div>
+      </div>
+
+      <!-- Zoom controls -->
+      <div class="absolute bottom-6 right-4 flex flex-col gap-2">
+        <button class="w-9 h-9 bg-surface-800 border border-white/20 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:border-white/40 transition-all text-lg font-bold" onclick="zoomIn()">+</button>
+        <button class="w-9 h-9 bg-surface-800 border border-white/20 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:border-white/40 transition-all text-lg font-bold" onclick="zoomOut()">−</button>
+      </div>
+
+      <!-- Forecast toggle -->
+      <div class="absolute bottom-6 left-4 flex items-center gap-2">
+        <button id="forecast-toggle" onclick="toggleForecast()" class="bg-surface-800 border border-white/20 rounded-lg px-3 py-2 text-xs text-white/70 hover:text-white hover:border-white/40 transition-all flex items-center gap-2">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Animate 90-min forecast
+        </button>
+        <div id="forecast-time" class="font-mono text-xs text-radar-400 hidden">T+0min</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const S = window.SIM;
+    const canvas = document.getElementById('map-canvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('map-tooltip');
+
+    // Layer visibility
+    const layers = { flood: true, distress: true, resources: true, vulnerability: true, gauges: false };
+    let zoom = 1;
+    let forecastPlaying = false;
+    let forecastStep = 0;
+    let forecastInterval = null;
+
+    // Resize canvas
+    function resize() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      draw();
+    }
+    window.addEventListener('resize', resize);
+
+    // Map data: normalized positions (0-1)
+    const blocks = [
+      { ...S.censusBlocks[0], x: 0.42, y: 0.48, r: 55 },
+      { ...S.censusBlocks[1], x: 0.33, y: 0.55, r: 45 },
+      { ...S.censusBlocks[2], x: 0.65, y: 0.32, r: 40 },
+      { ...S.censusBlocks[3], x: 0.55, y: 0.25, r: 34 },
+      { ...S.censusBlocks[4], x: 0.48, y: 0.15, r: 30 },
+      { ...S.censusBlocks[5], x: 0.25, y: 0.65, r: 38 },
+      { ...S.censusBlocks[6], x: 0.58, y: 0.62, r: 25 },
+    ];
+    const resources = [
+      { ...S.resources[0], x: 0.43, y: 0.46 },
+      { ...S.resources[1], x: 0.35, y: 0.52 },
+      { ...S.resources[2], x: 0.30, y: 0.70 },
+      { ...S.resources[3], x: 0.54, y: 0.23 },
+      { ...S.resources[4], x: 0.66, y: 0.30 },
+      { ...S.resources[5], x: 0.47, y: 0.13 },
+    ];
+    const distressPoints = [
+      { ...S.distressSignals[0], x: 0.44, y: 0.47 },
+      { ...S.distressSignals[1], x: 0.34, y: 0.54 },
+      { ...S.distressSignals[2], x: 0.56, y: 0.26 },
+      { ...S.distressSignals[3], x: 0.49, y: 0.16 },
+      { ...S.distressSignals[4], x: 0.67, y: 0.31 },
+      { ...S.distressSignals[5], x: 0.26, y: 0.64 },
+    ];
+
+    // Gauge positions
+    const gaugePoints = [
+      { ...S.gauges[0], x: 0.38, y: 0.60 },
+      { ...S.gauges[1], x: 0.30, y: 0.50 },
+      { ...S.gauges[2], x: 0.62, y: 0.28 },
+    ];
+
+    let hovered = null;
+    let animTime = 0;
+
+    function floodAlpha(depth, step = 0) {
+      const base = depth / 2.5;
+      const pulse = 0.08 * Math.sin(animTime * 0.04 + step);
+      return Math.min(0.85, base + pulse);
+    }
+
+    function draw() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      // Background grid
+      ctx.strokeStyle = 'rgba(8,187,217,0.06)';
+      ctx.lineWidth = 1;
+      const gs = 40 * zoom;
+      for (let x = 0; x < W; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+      for (let y = 0; y < H; y += gs) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+      // River path (Indus)
+      ctx.beginPath();
+      ctx.moveTo(W * 0.05, H * 0.95);
+      ctx.bezierCurveTo(W * 0.20, H * 0.85, W * 0.28, H * 0.65, W * 0.35, H * 0.55);
+      ctx.bezierCurveTo(W * 0.40, H * 0.50, W * 0.45, H * 0.45, W * 0.38, H * 0.35);
+      ctx.strokeStyle = 'rgba(96,165,250,0.35)';
+      ctx.lineWidth = 12 * zoom;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(96,165,250,0.6)';
+      ctx.lineWidth = 4 * zoom;
+      ctx.stroke();
+
+      // Flood zones
+      if (layers.flood) {
+        blocks.forEach((b, i) => {
+          const cx = b.x * W, cy = b.y * H;
+          const r = b.r * zoom;
+          const alpha = floodAlpha(b.floodDepth, i);
+          const color = b.floodDepth > 1.5 ? `rgba(185,28,28,${alpha})` :
+                        b.floodDepth > 1.0 ? `rgba(239,68,68,${alpha})` :
+                        b.floodDepth > 0.5 ? `rgba(245,158,11,${alpha})` :
+                        `rgba(234,179,8,${alpha * 0.7})`;
+
+          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          grad.addColorStop(0, color);
+          grad.addColorStop(1, 'transparent');
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, r, r * 0.65, 0, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          // Forecast zone (forecast step)
+          if (forecastStep > 0) {
+            const forecastR = r * (1 + forecastStep * 0.08);
+            const fGrad = ctx.createRadialGradient(cx, cy, r, cx, cy, forecastR);
+            fGrad.addColorStop(0, 'rgba(96,165,250,0.15)');
+            fGrad.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, forecastR, forecastR * 0.65, 0, 0, Math.PI * 2);
+            ctx.fillStyle = fGrad;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, forecastR, forecastR * 0.65, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(96,165,250,0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        });
+      }
+
+      // Vulnerability overlay
+      if (layers.vulnerability) {
+        blocks.forEach(b => {
+          const cx = b.x * W, cy = b.y * H;
+          ctx.font = `bold ${11 * zoom}px 'JetBrains Mono'`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = b.vuln > 75 ? '#fca5a5' : b.vuln > 50 ? '#fcd34d' : '#86efac';
+          ctx.fillText(`V:${b.vuln}`, cx, cy + b.r * zoom * 0.7 + 14);
+        });
+      }
+
+      // Stream gauges
+      if (layers.gauges) {
+        gaugePoints.forEach(g => {
+          const cx = g.x * W, cy = g.y * H;
+          const pct = g.current / g.threshold.critical;
+          const color = pct >= 1 ? '#ef4444' : pct >= 0.85 ? '#f59e0b' : '#22c55e';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 10 * zoom, 0, Math.PI * 2);
+          ctx.fillStyle = color + '33';
+          ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.font = `${9 * zoom}px 'JetBrains Mono'`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = color;
+          ctx.fillText('▲', cx, cy + 3);
+          ctx.fillText(g.name.substring(0, 10), cx, cy + 22 * zoom);
+        });
+      }
+
+      // Distress signals
+      if (layers.distress) {
+        distressPoints.forEach((d, i) => {
+          const cx = d.x * W, cy = d.y * H;
+          const pulse = Math.sin(animTime * 0.08 + i) * 0.5 + 0.5;
+          const r = (8 + pulse * 4) * zoom;
+          const color = d.severity === 'CRITICAL' ? '#ef4444' : d.severity === 'HIGH' ? '#f59e0b' : '#a78bfa';
+
+          // Pulse ring
+          if (!d.responded) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
+            ctx.strokeStyle = color + '40';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          // Pin
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6 * zoom, 0, Math.PI * 2);
+          ctx.fillStyle = d.responded ? '#22c55e' : color;
+          ctx.fill();
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        });
+      }
+
+      // Resources
+      if (layers.resources) {
+        resources.forEach(r => {
+          const cx = r.x * W, cy = r.y * H;
+          const color = r.status === 'DEPLOYED' ? '#3b82f6' : r.status === 'EN_ROUTE' ? '#f59e0b' : r.status === 'ACTIVE' ? '#22c55e' : '#6b7280';
+          const s = 8 * zoom;
+          ctx.fillStyle = color;
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 1.5;
+          // Square marker for resources
+          ctx.beginPath();
+          ctx.rect(cx - s, cy - s, s * 2, s * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+      }
+
+      // Block labels
+      blocks.forEach(b => {
+        const cx = b.x * W, cy = b.y * H;
+        ctx.font = `${9 * zoom}px 'Inter'`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText(b.name, cx, cy - b.r * zoom * 0.7 + 2);
+      });
+
+      animTime++;
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+
+    // Hover detection
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const W = canvas.width, H = canvas.height;
+
+      let found = null;
+      // Check distress
+      if (layers.distress) {
+        distressPoints.forEach(d => {
+          const cx = d.x * W, cy = d.y * H;
+          if (Math.hypot(mx - cx, my - cy) < 12) found = { type: 'distress', data: d };
+        });
+      }
+      // Check resources
+      if (layers.resources && !found) {
+        resources.forEach(r => {
+          const cx = r.x * W, cy = r.y * H;
+          if (Math.abs(mx - cx) < 10 && Math.abs(my - cy) < 10) found = { type: 'resource', data: r };
+        });
+      }
+      // Check blocks
+      if (layers.flood && !found) {
+        blocks.forEach(b => {
+          const cx = b.x * W, cy = b.y * H;
+          if (Math.hypot(mx - cx, my - cy) < b.r) found = { type: 'block', data: b };
+        });
+      }
+
+      if (found) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX - rect.left + 14) + 'px';
+        tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+        if (found.type === 'block') {
+          const b = found.data;
+          tooltip.innerHTML = `<div class="font-semibold text-white mb-1">${b.name}</div>
+            <div class="text-white/50 space-y-0.5">
+              <div>Population: <span class="text-white">${b.pop.toLocaleString()}</span></div>
+              <div>Vulnerability: <span class="${b.vuln>75?'text-red-400':b.vuln>50?'text-amber-400':'text-green-400'} font-mono font-semibold">${b.vuln}/100</span></div>
+              <div>Flood depth: <span class="text-white">${b.floodDepth}m</span></div>
+              <div>Age 65+: <span class="text-white">${b.age65}%</span> · Disabled: <span class="text-white">${b.disabled}%</span></div>
+              <div>No vehicle: <span class="text-white">${b.noVehicle}%</span></div>
+              <div class="mt-1 font-semibold ${b.status==='EVACUATE'?'text-red-400':b.status==='WARNING'?'text-amber-400':'text-green-400'}">${b.status}</div>
+            </div>`;
+        } else if (found.type === 'distress') {
+          const d = found.data;
+          tooltip.innerHTML = `<div class="font-semibold ${d.severity==='CRITICAL'?'text-red-400':'text-amber-400'} mb-1">Distress Signal — ${d.severity}</div>
+            <div class="text-white/70 text-xs mb-1">"${d.text.substring(0,80)}..."</div>
+            <div class="text-white/40 text-xs">${d.platform} · ${d.time} · ${Math.round(d.confidence*100)}% confidence</div>
+            <div class="mt-1 text-xs ${d.responded?'text-green-400':'text-red-400'}">${d.responded?'✓ Responded':'! Awaiting response'}</div>`;
+        } else if (found.type === 'resource') {
+          const r = found.data;
+          tooltip.innerHTML = `<div class="font-semibold text-blue-400 mb-1">${r.type}</div>
+            <div class="text-white/70 text-xs">${r.unit}</div>
+            <div class="text-white/40 text-xs">${r.sector}</div>
+            <div class="mt-1 text-xs font-mono ${r.status==='DEPLOYED'||r.status==='ACTIVE'?'text-green-400':'text-amber-400'}">${r.status}${r.eta?' · ETA '+r.eta:''}</div>`;
+        }
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'crosshair';
+      }
+    });
+    canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+    // Layer toggle
+    window.toggleLayer = (btn, layer) => {
+      layers[layer] = !layers[layer];
+      btn.classList.toggle('active', layers[layer]);
+    };
+
+    // Zoom
+    window.zoomIn = () => { zoom = Math.min(2.5, zoom + 0.2); };
+    window.zoomOut = () => { zoom = Math.max(0.5, zoom - 0.2); };
+
+    // Forecast animation
+    window.toggleForecast = () => {
+      forecastPlaying = !forecastPlaying;
+      const btn = document.getElementById('forecast-toggle');
+      const timeEl = document.getElementById('forecast-time');
+      if (forecastPlaying) {
+        forecastStep = 0;
+        timeEl.classList.remove('hidden');
+        btn.classList.add('border-radar-500/40','text-radar-400');
+        forecastInterval = setInterval(() => {
+          forecastStep = (forecastStep + 1) % 7;
+          timeEl.textContent = `T+${forecastStep * 15}min`;
+          if (forecastStep === 6) {
+            clearInterval(forecastInterval);
+            forecastPlaying = false;
+            btn.classList.remove('border-radar-500/40','text-radar-400');
+            setTimeout(() => { forecastStep = 0; timeEl.classList.add('hidden'); }, 2000);
+          }
+        }, 800);
+      } else {
+        clearInterval(forecastInterval);
+        forecastStep = 0;
+        timeEl.classList.add('hidden');
+        btn.classList.remove('border-radar-500/40','text-radar-400');
+      }
+    };
+
+    // Sector list
+    const sl = document.getElementById('sector-list');
+    S.censusBlocks.forEach(b => {
+      sl.innerHTML += `<div class="flex items-center justify-between py-1 border-b border-white/5 cursor-pointer hover:bg-white/5 px-1 rounded transition-colors">
+        <span class="text-xs text-white/70 truncate">${b.name}</span>
+        <span class="text-xs px-1.5 rounded font-mono ml-2 flex-shrink-0 ${S.alertColor(b.status)}">${b.floodDepth}m</span>
+      </div>`;
+    });
+  });
+  </script>
+</body>
+</html>

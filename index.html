@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FloodSense AI — Flood Emergency Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles/main.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            radar: { 50:'#edfcff', 100:'#d6f8ff', 200:'#adf1ff', 300:'#75e6ff', 400:'#2dd6f5', 500:'#08bbd9', 600:'#0096b7', 700:'#007a94', 800:'#066278', 900:'#0a5265' },
+            flood: { 50:'#eff6ff', 100:'#dbeafe', 200:'#bfdbfe', 300:'#93c5fd', 400:'#60a5fa', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 800:'#1e40af', 900:'#1e3a8a' },
+            alert: { low:'#22c55e', medium:'#f59e0b', high:'#ef4444', critical:'#7c3aed' },
+            surface: { 900:'#060d18', 800:'#0b1628', 700:'#0f2040', 600:'#142b55', 500:'#1a3668' }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'monospace'],
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-surface-900 text-white font-sans min-h-screen overflow-x-hidden">
+
+  <!-- Animated background grid -->
+  <div class="fixed inset-0 pointer-events-none z-0" aria-hidden="true">
+    <div id="bg-grid" class="absolute inset-0 opacity-10"></div>
+    <div class="absolute inset-0 bg-gradient-to-b from-surface-900 via-transparent to-surface-900"></div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="relative z-50 border-b border-white/10 bg-surface-900/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-radar-500 flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-display font-700 text-lg tracking-tight">FloodSense<span class="text-radar-400"> AI</span></span>
+          <div class="text-xs text-white/40 font-mono leading-none">IEEE Response Quest 2026</div>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center gap-6 text-sm text-white/60">
+        <a href="index.html" class="text-white font-medium">Home</a>
+        <a href="dashboard.html" class="hover:text-white transition-colors">Command Center</a>
+        <a href="map.html" class="hover:text-white transition-colors">Live Map</a>
+        <a href="alerts.html" class="hover:text-white transition-colors">Alerts</a>
+        <a href="analytics.html" class="hover:text-white transition-colors">Analytics</a>
+        <a href="reports.html" class="hover:text-white transition-colors">Reports</a>
+      </div>
+      <a href="dashboard.html" class="bg-radar-500 hover:bg-radar-400 text-white text-sm font-medium px-5 py-2 rounded-lg transition-all duration-200 shadow-lg shadow-radar-500/20 flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+        Launch Platform
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="relative z-10 pt-24 pb-20 px-6">
+    <div class="max-w-5xl mx-auto text-center">
+      <div class="inline-flex items-center gap-2 bg-radar-500/10 border border-radar-500/30 rounded-full px-4 py-1.5 text-radar-400 text-sm font-mono mb-8">
+        <span class="w-2 h-2 bg-radar-400 rounded-full animate-pulse"></span>
+        IEEE Response Quest Challenge 2026 — Concept #5204 · Score 4.52/5
+      </div>
+      <h1 class="font-display text-5xl md:text-7xl font-bold leading-none tracking-tight mb-6">
+        From data chaos<br/>
+        <span class="text-radar-400">to decision clarity</span><br/>
+        <span class="text-white/40 text-3xl md:text-4xl font-normal">in under 3 minutes.</span>
+      </h1>
+      <p class="text-white/60 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-10">
+        FloodSense AI fuses satellite imagery, weather radar, hydrological sensors, census vulnerability data, and social media distress signals into a single real-time command interface for flood emergency responders.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="dashboard.html" class="bg-radar-500 hover:bg-radar-400 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all duration-200 shadow-xl shadow-radar-500/30 flex items-center justify-center gap-2">
+          Open Command Center
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </a>
+        <a href="map.html" class="border border-white/20 hover:border-white/40 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all duration-200 flex items-center justify-center gap-2">
+          View Live Map
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live Stats Bar -->
+  <section class="relative z-10 border-y border-white/10 bg-surface-800/50 py-5 px-6">
+    <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-6">
+      <div class="text-center">
+        <div class="font-mono text-2xl font-semibold text-radar-400" id="stat-sources">8</div>
+        <div class="text-white/40 text-xs mt-1">Data Sources Active</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono text-2xl font-semibold text-green-400" id="stat-latency">&lt;3 min</div>
+        <div class="text-white/40 text-xs mt-1">Decision Latency</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono text-2xl font-semibold text-amber-400" id="stat-iou">0.89 IoU</div>
+        <div class="text-white/40 text-xs mt-1">Flood Map Accuracy</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono text-2xl font-semibold text-purple-400" id="stat-score">4.52/5</div>
+        <div class="text-white/40 text-xs mt-1">IEEE Review Score</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono text-2xl font-semibold text-red-400" id="stat-pop">1.5B</div>
+        <div class="text-white/40 text-xs mt-1">People Flood-Affected</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="relative z-10 py-20 px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="text-center mb-14">
+        <div class="text-radar-400 font-mono text-sm mb-3">PLATFORM CAPABILITIES</div>
+        <h2 class="font-display text-3xl md:text-4xl font-bold">Everything a flood responder needs</h2>
+        <p class="text-white/50 mt-3 max-w-xl mx-auto">Five integrated layers that turn raw disaster data into ranked, actionable intelligence.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+
+        <!-- Feature cards -->
+        <a href="map.html" class="feature-card group bg-surface-800 border border-white/10 rounded-2xl p-6 hover:border-radar-500/40 hover:bg-surface-700 transition-all duration-300 cursor-pointer">
+          <div class="w-11 h-11 rounded-xl bg-radar-500/15 flex items-center justify-center mb-4 group-hover:bg-radar-500/25 transition-colors">
+            <svg class="w-6 h-6 text-radar-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">Live Inundation Map</h3>
+          <p class="text-white/50 text-sm leading-relaxed">Real-time flood extent segmentation from Sentinel-1 SAR imagery. U-Net CNN at 0.89 IoU — updated every 90 seconds.</p>
+          <div class="mt-4 text-radar-400 text-sm font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Open map <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <a href="dashboard.html" class="feature-card group bg-surface-800 border border-white/10 rounded-2xl p-6 hover:border-flood-500/40 hover:bg-surface-700 transition-all duration-300 cursor-pointer">
+          <div class="w-11 h-11 rounded-xl bg-flood-500/15 flex items-center justify-center mb-4 group-hover:bg-flood-500/25 transition-colors">
+            <svg class="w-6 h-6 text-flood-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">Command Center</h3>
+          <p class="text-white/50 text-sm leading-relaxed">Incident Commander view with evacuation priority lists, resource deployment tracker, and 90-minute forecast animation.</p>
+          <div class="mt-4 text-flood-400 text-sm font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Open dashboard <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <a href="alerts.html" class="feature-card group bg-surface-800 border border-white/10 rounded-2xl p-6 hover:border-red-500/40 hover:bg-surface-700 transition-all duration-300 cursor-pointer">
+          <div class="w-11 h-11 rounded-xl bg-red-500/15 flex items-center justify-center mb-4 group-hover:bg-red-500/25 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">Alert Management</h3>
+          <p class="text-white/50 text-sm leading-relaxed">Automated distress signal detection via BERTweet NLP. Geolocated to 1km grid. Push alerts to field teams instantly.</p>
+          <div class="mt-4 text-red-400 text-sm font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">View alerts <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <a href="analytics.html" class="feature-card group bg-surface-800 border border-white/10 rounded-2xl p-6 hover:border-purple-500/40 hover:bg-surface-700 transition-all duration-300 cursor-pointer">
+          <div class="w-11 h-11 rounded-xl bg-purple-500/15 flex items-center justify-center mb-4 group-hover:bg-purple-500/25 transition-colors">
+            <svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">ML Analytics</h3>
+          <p class="text-white/50 text-sm leading-relaxed">LSTM streamflow forecasts, Random Forest vulnerability scores, model confidence bands. All four ML models in one view.</p>
+          <div class="mt-4 text-purple-400 text-sm font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">View analytics <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <a href="reports.html" class="feature-card group bg-surface-800 border border-white/10 rounded-2xl p-6 hover:border-amber-500/40 hover:bg-surface-700 transition-all duration-300 cursor-pointer">
+          <div class="w-11 h-11 rounded-xl bg-amber-500/15 flex items-center justify-center mb-4 group-hover:bg-amber-500/25 transition-colors">
+            <svg class="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">Situation Reports</h3>
+          <p class="text-white/50 text-sm leading-relaxed">Auto-generated PDF and GeoJSON briefings for Public Information Officers. Population counts, exposure maps, next actions.</p>
+          <div class="mt-4 text-amber-400 text-sm font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Generate report <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <div class="feature-card bg-surface-800 border border-white/10 rounded-2xl p-6">
+          <div class="w-11 h-11 rounded-xl bg-green-500/15 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <h3 class="font-display font-semibold text-lg mb-2">Resilient Architecture</h3>
+          <p class="text-white/50 text-sm leading-relaxed">Offline tile caching, edge inference below 256 kbps, graceful fallback: Sentinel-1 → Landsat, gauges → radar QPE. Stays up when networks don't.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture overview -->
+  <section class="relative z-10 py-20 px-6 border-t border-white/10">
+    <div class="max-w-7xl mx-auto">
+      <div class="text-center mb-14">
+        <div class="text-radar-400 font-mono text-sm mb-3">SYSTEM ARCHITECTURE</div>
+        <h2 class="font-display text-3xl md:text-4xl font-bold">Five layers, one picture</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div class="arch-layer bg-surface-800 border border-white/10 rounded-xl p-5 text-center">
+          <div class="font-mono text-xs text-radar-400 mb-2">LAYER 1</div>
+          <div class="font-display font-semibold mb-2">Ingestion</div>
+          <div class="text-white/40 text-xs leading-relaxed">8 source categories · REST, SFTP, WebSocket, MQTT</div>
+        </div>
+        <div class="arch-layer bg-surface-800 border border-white/10 rounded-xl p-5 text-center">
+          <div class="font-mono text-xs text-flood-400 mb-2">LAYER 2</div>
+          <div class="font-display font-semibold mb-2">Storage</div>
+          <div class="text-white/40 text-xs leading-relaxed">InfluxDB time-series · PostGIS geospatial</div>
+        </div>
+        <div class="arch-layer bg-surface-800 border border-purple-500/20 rounded-xl p-5 text-center">
+          <div class="font-mono text-xs text-purple-400 mb-2">LAYER 3</div>
+          <div class="font-display font-semibold mb-2">AI Engine</div>
+          <div class="text-white/40 text-xs leading-relaxed">U-Net · LSTM · Random Forest · BERTweet</div>
+        </div>
+        <div class="arch-layer bg-surface-800 border border-white/10 rounded-xl p-5 text-center">
+          <div class="font-mono text-xs text-amber-400 mb-2">LAYER 4</div>
+          <div class="font-display font-semibold mb-2">Kafka Bus</div>
+          <div class="text-white/40 text-xs leading-relaxed">Event streaming · audit log · real-time sync</div>
+        </div>
+        <div class="arch-layer bg-surface-800 border border-white/10 rounded-xl p-5 text-center">
+          <div class="font-mono text-xs text-green-400 mb-2">LAYER 5</div>
+          <div class="font-display font-semibold mb-2">Dashboard</div>
+          <div class="text-white/40 text-xs leading-relaxed">React · MapLibre GL · 3 role views</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="relative z-10 border-t border-white/10 py-10 px-6">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div>
+        <div class="font-display font-bold text-lg">FloodSense<span class="text-radar-400"> AI</span></div>
+        <div class="text-white/40 text-sm mt-1">Muhammad Zunnurain Hussain · IEEE #92687282 · engrrhusain@gmail.com</div>
+      </div>
+      <div class="text-white/30 text-sm text-center">
+        IEEE Response Quest Challenge 2026 · Concept #5204 · Score 4.52/5
+      </div>
+    </div>
+  </footer>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Alerts — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles/main.css"/>
+  <script>tailwind.config={theme:{extend:{colors:{radar:{400:'#2dd6f5',500:'#08bbd9'},surface:{900:'#060d18',800:'#0b1628',700:'#0f2040',600:'#142b55',500:'#1a3668'}},fontFamily:{mono:['JetBrains Mono','monospace'],sans:['Inter','sans-serif'],display:['Space Grotesk','sans-serif']}}}}</script>
+</head>
+<body class="bg-surface-900 text-white font-sans min-h-screen">
+  <header class="sticky top-0 z-50 bg-surface-800 border-b border-white/10 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <a href="index.html" class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg></div><span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span></a>
+      <nav class="hidden md:flex items-center gap-4 text-xs text-white/50">
+        <a href="dashboard.html" class="hover:text-white">Command</a><a href="map.html" class="hover:text-white">Map</a><a href="alerts.html" class="text-radar-400 font-medium">Alerts</a><a href="analytics.html" class="hover:text-white">Analytics</a><a href="reports.html" class="hover:text-white">Reports</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="font-mono text-xs text-white/60">PKT <span id="live-clock" class="text-white"></span></div>
+      <div class="flex items-center gap-2 bg-red-900/40 border border-red-500/30 rounded-lg px-3 py-1.5">
+        <span class="w-2 h-2 bg-red-500 rounded-full alert-pulse"></span>
+        <span class="text-xs text-red-400 font-medium">5 unresponded</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-start justify-between mb-8">
+      <div>
+        <h1 class="font-display text-3xl font-bold">Alert Management</h1>
+        <p class="text-white/50 mt-1 text-sm">BERTweet NLP classifier · Real-time social media distress detection · Geolocated to 1km grid</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <select id="filter-severity" class="bg-surface-800 border border-white/20 rounded-lg px-3 py-2 text-sm text-white/70 focus:border-radar-500 outline-none">
+          <option value="all">All severity</option>
+          <option value="CRITICAL">Critical only</option>
+          <option value="HIGH">High only</option>
+          <option value="MEDIUM">Medium only</option>
+        </select>
+        <select id="filter-status" class="bg-surface-800 border border-white/20 rounded-lg px-3 py-2 text-sm text-white/70 focus:border-radar-500 outline-none">
+          <option value="all">All status</option>
+          <option value="unresponded">Unresponded</option>
+          <option value="responded">Responded</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-surface-800 border border-red-500/20 rounded-xl p-4">
+        <div class="font-mono text-3xl font-semibold text-red-400" id="count-critical">0</div>
+        <div class="text-white/50 text-sm mt-1">Critical</div>
+      </div>
+      <div class="bg-surface-800 border border-amber-500/20 rounded-xl p-4">
+        <div class="font-mono text-3xl font-semibold text-amber-400" id="count-high">0</div>
+        <div class="text-white/50 text-sm mt-1">High</div>
+      </div>
+      <div class="bg-surface-800 border border-purple-500/20 rounded-xl p-4">
+        <div class="font-mono text-3xl font-semibold text-purple-400" id="count-medium">0</div>
+        <div class="text-white/50 text-sm mt-1">Medium</div>
+      </div>
+      <div class="bg-surface-800 border border-green-500/20 rounded-xl p-4">
+        <div class="font-mono text-3xl font-semibold text-green-400" id="count-responded">0</div>
+        <div class="text-white/50 text-sm mt-1">Responded</div>
+      </div>
+    </div>
+
+    <!-- NLP model info bar -->
+    <div class="bg-surface-800 border border-white/10 rounded-xl p-4 mb-6 flex flex-wrap gap-6 items-center">
+      <div class="text-xs text-white/40 font-mono">NLP MODEL</div>
+      <div class="flex items-center gap-2 text-sm"><span class="text-white/50">Model:</span><span class="font-mono text-white">BERTweet (fine-tuned)</span></div>
+      <div class="flex items-center gap-2 text-sm"><span class="text-white/50">Sources:</span><span class="text-white">Twitter/X · Telegram</span></div>
+      <div class="flex items-center gap-2 text-sm"><span class="text-white/50">Resolution:</span><span class="font-mono text-white">1km grid</span></div>
+      <div class="flex items-center gap-2 text-sm"><span class="text-white/50">Latency:</span><span class="font-mono text-green-400">Real-time</span></div>
+      <div class="flex items-center gap-2 text-sm"><span class="text-white/50">PII handling:</span><span class="text-green-400">Stripped at classification</span></div>
+    </div>
+
+    <!-- Alert cards -->
+    <div id="alert-list" class="space-y-4"></div>
+  </div>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const S = window.SIM;
+    const signals = S.distressSignals;
+
+    // Counts
+    document.getElementById('count-critical').textContent = signals.filter(d=>d.severity==='CRITICAL').length;
+    document.getElementById('count-high').textContent = signals.filter(d=>d.severity==='HIGH').length;
+    document.getElementById('count-medium').textContent = signals.filter(d=>d.severity==='MEDIUM').length;
+    document.getElementById('count-responded').textContent = signals.filter(d=>d.responded).length;
+
+    function renderAlerts(list) {
+      const container = document.getElementById('alert-list');
+      container.innerHTML = '';
+      list.forEach(d => {
+        const border = d.severity === 'CRITICAL' ? 'border-red-500/40' : d.severity === 'HIGH' ? 'border-amber-500/40' : 'border-purple-500/40';
+        const badge = d.severity === 'CRITICAL' ? 'badge-critical' : d.severity === 'HIGH' ? 'badge-high' : 'badge-medium';
+        const conf = Math.round(d.confidence * 100);
+        container.innerHTML += `
+          <div class="bg-surface-800 border ${border} rounded-xl p-5">
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-3 mb-2 flex-wrap">
+                  <span class="${badge} text-xs px-2.5 py-1 rounded-full font-mono font-semibold">${d.severity}</span>
+                  <span class="text-xs text-white/40 font-mono">${d.id}</span>
+                  <span class="text-xs text-white/40">${d.platform}</span>
+                  <span class="text-xs text-white/40">${d.time} PKT</span>
+                  ${d.responded ? '<span class="text-xs text-green-400 font-medium">✓ Responded</span>' : '<span class="text-xs text-red-400 font-medium animate-pulse">! Awaiting response</span>'}
+                </div>
+                <p class="text-white/80 text-sm leading-relaxed mb-3">"${d.text}"</p>
+                <div class="flex flex-wrap gap-4 text-xs text-white/50">
+                  <span>📍 Grid: ${d.lat.toFixed(3)}°N, ${d.lng.toFixed(3)}°E</span>
+                  <span>🤖 Confidence: <span class="font-mono text-white ${conf>=90?'text-green-400':conf>=80?'text-amber-400':'text-red-400'}">${conf}%</span></span>
+                </div>
+              </div>
+              <div class="flex flex-col gap-2 flex-shrink-0">
+                <button onclick="respondToAlert('${d.id}', this)" class="bg-surface-700 hover:bg-radar-500/20 border border-white/20 hover:border-radar-500/40 text-white/70 hover:text-radar-400 text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${d.responded?'opacity-50 cursor-default':''}">
+                  ${d.responded ? '✓ Dispatched' : 'Dispatch Team'}
+                </button>
+                <a href="map.html" class="bg-surface-700 hover:bg-surface-600 border border-white/20 text-white/70 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-all font-medium text-center">View on Map</a>
+              </div>
+            </div>
+            <!-- NLP confidence bar -->
+            <div class="mt-4 pt-4 border-t border-white/10">
+              <div class="flex items-center justify-between text-xs text-white/40 mb-1.5">
+                <span>NLP confidence breakdown</span>
+                <span class="font-mono">${conf}% flood-related distress</span>
+              </div>
+              <div class="h-1.5 bg-surface-700 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700 ${conf>=90?'bg-green-500':conf>=80?'bg-amber-500':'bg-red-500'}" style="width:${conf}%"></div>
+              </div>
+            </div>
+          </div>`;
+      });
+      if (list.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-white/30">No alerts match the current filter.</div>';
+      }
+    }
+
+    renderAlerts(signals);
+
+    // Filters
+    function applyFilters() {
+      const sev = document.getElementById('filter-severity').value;
+      const stat = document.getElementById('filter-status').value;
+      let filtered = signals;
+      if (sev !== 'all') filtered = filtered.filter(d => d.severity === sev);
+      if (stat === 'unresponded') filtered = filtered.filter(d => !d.responded);
+      if (stat === 'responded') filtered = filtered.filter(d => d.responded);
+      renderAlerts(filtered);
+    }
+
+    document.getElementById('filter-severity').addEventListener('change', applyFilters);
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+
+    window.respondToAlert = (id, btn) => {
+      const d = S.distressSignals.find(d => d.id === id);
+      if (d && !d.responded) {
+        d.responded = true;
+        btn.textContent = '✓ Dispatched';
+        btn.classList.add('opacity-50');
+        document.getElementById('count-responded').textContent = signals.filter(d=>d.responded).length;
+        applyFilters();
+      }
+    };
+  });
+  </script>
+</body>
+</html>

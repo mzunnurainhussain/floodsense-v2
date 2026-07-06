@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Command Center — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles/main.css" />
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: {
+        radar: { 400:'#2dd6f5', 500:'#08bbd9' },
+        flood: { 400:'#60a5fa', 500:'#3b82f6' },
+        surface: { 900:'#060d18', 800:'#0b1628', 700:'#0f2040', 600:'#142b55', 500:'#1a3668' }
+      }, fontFamily: { mono:['JetBrains Mono','monospace'], sans:['Inter','sans-serif'], display:['Space Grotesk','sans-serif'] } } }
+    }
+  </script>
+</head>
+<body class="bg-surface-900 text-white font-sans overflow-hidden h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <header class="flex-shrink-0 bg-surface-800 border-b border-white/10 px-4 py-2 flex items-center justify-between z-50">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+        </div>
+        <span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span>
+      </a>
+      <div class="h-5 w-px bg-white/20"></div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-red-500 rounded-full alert-pulse"></span>
+        <span class="font-mono text-xs text-red-400 font-semibold">INCIDENT ACTIVE</span>
+      </div>
+      <div class="hidden md:block font-mono text-xs text-white/50" id="incident-id"></div>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div class="hidden md:flex items-center gap-5 text-xs text-white/50">
+        <a href="dashboard.html" class="text-radar-400 font-medium">Command</a>
+        <a href="map.html" class="hover:text-white transition-colors">Map</a>
+        <a href="alerts.html" class="hover:text-white transition-colors">Alerts</a>
+        <a href="analytics.html" class="hover:text-white transition-colors">Analytics</a>
+        <a href="reports.html" class="hover:text-white transition-colors">Reports</a>
+      </div>
+      <div class="font-mono text-xs text-white/60">PKT <span id="live-clock" class="text-white"></span></div>
+      <div class="flex items-center gap-1.5 bg-surface-700 border border-white/10 rounded-lg px-3 py-1.5">
+        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+        <span class="text-xs text-green-400 font-medium">8/8 sources live</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Left sidebar — Incident panel -->
+    <aside class="w-72 flex-shrink-0 bg-surface-800 border-r border-white/10 overflow-y-auto flex flex-col">
+
+      <!-- Incident header -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-1">ACTIVE INCIDENT</div>
+        <div class="font-display font-bold text-sm" id="incident-name">—</div>
+        <div class="text-xs text-white/40 mt-1">Elapsed: <span class="text-white/70" id="elapsed-time">—</span></div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <div class="bg-surface-700 rounded-lg p-2 text-center">
+            <div class="font-mono text-lg font-semibold text-amber-400" id="stat-at-risk">—</div>
+            <div class="text-xs text-white/40">At Risk</div>
+          </div>
+          <div class="bg-surface-700 rounded-lg p-2 text-center">
+            <div class="font-mono text-lg font-semibold text-green-400" id="stat-evacuated">—</div>
+            <div class="text-xs text-white/40">Evacuated</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evacuation Priority List -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3 flex items-center justify-between">
+          EVACUATION PRIORITY
+          <span class="text-radar-400">AI-ranked</span>
+        </div>
+        <div id="priority-list" class="space-y-2"></div>
+      </div>
+
+      <!-- Resource Status -->
+      <div class="p-4 border-b border-white/10">
+        <div class="text-xs text-white/40 font-mono mb-3">RESOURCES DEPLOYED</div>
+        <div id="resource-list" class="space-y-2"></div>
+      </div>
+
+      <!-- Data Sources -->
+      <div class="p-4">
+        <div class="text-xs text-white/40 font-mono mb-3">DATA STREAMS</div>
+        <div id="source-list" class="space-y-1.5"></div>
+      </div>
+    </aside>
+
+    <!-- Center — Map + Forecast -->
+    <main class="flex-1 overflow-y-auto bg-surface-900">
+
+      <!-- Gauge Alert Banner -->
+      <div class="bg-red-900/30 border-b border-red-500/30 px-4 py-2 flex items-center gap-3">
+        <svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        <span class="text-red-300 text-xs font-medium">CRITICAL — Indus at Kotri: 487,230 cusecs (+23% in 2h) · Phuleli Canal: 18,400 cusecs — ABOVE CRITICAL THRESHOLD</span>
+        <a href="analytics.html" class="ml-auto text-xs text-red-400 hover:text-red-300 underline flex-shrink-0">View forecasts →</a>
+      </div>
+
+      <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Map panel -->
+        <div class="lg:col-span-2">
+          <div class="bg-surface-800 border border-white/10 rounded-xl overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <div>
+                <div class="font-display font-semibold text-sm">Live Inundation Map</div>
+                <div class="text-xs text-white/40 font-mono mt-0.5">U-Net CNN · Sentinel-1 SAR · Updated 03:51 PKT</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="badge-active text-xs px-2 py-0.5 rounded-full font-mono">0.89 IoU</span>
+                <a href="map.html" class="text-xs text-radar-400 hover:text-radar-300">Full map →</a>
+              </div>
+            </div>
+            <!-- Simulated flood map -->
+            <div class="map-container h-80 relative" id="mini-map">
+              <!-- Flood zones -->
+              <div class="flood-zone w-32 h-20 bg-red-500/40" style="top:30%;left:35%;animation-delay:0s"></div>
+              <div class="flood-zone w-24 h-16 bg-red-600/30" style="top:45%;left:25%;animation-delay:0.8s"></div>
+              <div class="flood-zone w-20 h-14 bg-amber-500/30" style="top:20%;left:55%;animation-delay:1.5s"></div>
+              <div class="flood-zone w-14 h-10 bg-amber-400/20" style="top:60%;left:60%;animation-delay:0.4s"></div>
+              <div class="flood-zone w-10 h-8 bg-yellow-400/20" style="top:15%;left:15%;animation-delay:1.2s"></div>
+
+              <!-- Distress pins -->
+              <div class="absolute" style="top:32%;left:38%">
+                <div class="w-3 h-3 bg-red-500 rounded-full border-2 border-white alert-pulse cursor-pointer tooltip" data-tip="DS-001: Qasimabad — Family of 6 trapped"></div>
+              </div>
+              <div class="absolute" style="top:47%;left:27%">
+                <div class="w-3 h-3 bg-red-500 rounded-full border-2 border-white alert-pulse cursor-pointer tooltip" data-tip="DS-002: Unit 8 — Elderly trapped"></div>
+              </div>
+              <div class="absolute" style="top:22%;left:57%">
+                <div class="w-3 h-3 bg-amber-500 rounded-full border-2 border-white cursor-pointer tooltip" data-tip="DS-003: Matiari — Children at bridge (Responded)"></div>
+              </div>
+              <div class="absolute" style="top:62%;left:62%">
+                <div class="w-3 h-3 bg-amber-500 rounded-full border-2 border-white cursor-pointer tooltip" data-tip="DS-005: Tando — Streets underwater"></div>
+              </div>
+
+              <!-- Resource markers -->
+              <div class="absolute" style="top:30%;left:40%">
+                <div class="w-4 h-4 bg-blue-500 rounded flex items-center justify-center cursor-pointer tooltip" data-tip="R-001: NDMA Team Alpha — DEPLOYED">
+                  <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+                </div>
+              </div>
+
+              <!-- Legend -->
+              <div class="absolute bottom-3 left-3 bg-surface-900/90 border border-white/10 rounded-lg p-2.5 text-xs space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500/70"></div><span class="text-white/70">Critical flood zone</span></div>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-500/70"></div><span class="text-white/70">Warning zone</span></div>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500 border-2 border-white"></div><span class="text-white/70">Distress signal</span></div>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded bg-blue-500"></div><span class="text-white/70">Active resource</span></div>
+              </div>
+
+              <!-- Confidence overlay -->
+              <div class="absolute top-3 right-3 confidence-band px-2 py-1.5 text-xs font-mono">
+                Model confidence: <span class="text-radar-400">94.2%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="space-y-4">
+
+          <!-- Forecast chart -->
+          <div class="bg-surface-800 border border-white/10 rounded-xl p-4">
+            <div class="font-display font-semibold text-sm mb-1">90-min Streamflow Forecast</div>
+            <div class="text-xs text-white/40 font-mono mb-3">LSTM · Indus at Kotri · Calibrated uncertainty</div>
+            <canvas id="forecast-chart" height="130"></canvas>
+            <div class="mt-2 flex items-center justify-between text-xs text-white/40">
+              <span>Now</span><span>+30m</span><span>+60m</span><span>+90m</span>
+            </div>
+            <div class="mt-2 text-xs text-white/50">
+              Peak forecast: <span class="text-red-400 font-mono">563,000 cusecs</span> at T+90
+            </div>
+          </div>
+
+          <!-- Distress signal feed -->
+          <div class="bg-surface-800 border border-white/10 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <div class="font-display font-semibold text-sm">Distress Signals</div>
+                <div class="text-xs text-white/40 font-mono">BERTweet NLP · Real-time</div>
+              </div>
+              <a href="alerts.html" class="text-xs text-radar-400 hover:text-radar-300">View all →</a>
+            </div>
+            <div id="distress-feed" class="space-y-2"></div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const S = window.SIM;
+
+    // Incident info
+    document.getElementById('incident-id').textContent = S.incident.id;
+    document.getElementById('incident-name').textContent = S.incident.name;
+    document.getElementById('stat-at-risk').textContent = S.fmt(S.incident.atRisk);
+    document.getElementById('stat-evacuated').textContent = S.fmt(S.incident.evacuated);
+
+    // Elapsed timer
+    const et = document.getElementById('elapsed-time');
+    const updateElapsed = () => { et.textContent = S.elapsed(); };
+    updateElapsed(); setInterval(updateElapsed, 60000);
+
+    // Priority list
+    const pl = document.getElementById('priority-list');
+    S.censusBlocks.forEach(b => {
+      const color = b.status === 'EVACUATE' ? 'border-red-500/40 bg-red-500/5' : b.status === 'WARNING' ? 'border-amber-500/40 bg-amber-500/5' : 'border-white/10 bg-transparent';
+      pl.innerHTML += `
+        <div class="border ${color} rounded-lg p-2.5 cursor-pointer hover:bg-white/5 transition-colors">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-white">${b.priority}. ${b.name}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded font-mono ${S.alertColor(b.status)}">${b.status}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-1.5">
+            <div class="flex-1 bg-surface-700 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full ${b.vuln>75?'bg-red-500':b.vuln>50?'bg-amber-500':'bg-green-500'}" style="width:${b.vuln}%"></div>
+            </div>
+            <span class="text-xs font-mono text-white/50">${b.vuln}/100</span>
+          </div>
+          <div class="text-xs text-white/40 mt-1">Pop: ${S.fmt(b.pop)} · Depth: ${b.floodDepth}m</div>
+        </div>`;
+    });
+
+    // Resource list
+    const rl = document.getElementById('resource-list');
+    S.resources.forEach(r => {
+      const statusColor = r.status === 'DEPLOYED' ? 'text-green-400' : r.status === 'EN_ROUTE' ? 'text-amber-400' : r.status === 'ACTIVE' ? 'text-radar-400' : 'text-white/40';
+      rl.innerHTML += `
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <div>
+            <div class="text-xs font-medium">${r.unit}</div>
+            <div class="text-xs text-white/40">${r.type} · ${r.sector}</div>
+          </div>
+          <span class="text-xs font-mono ${statusColor}">${r.status}${r.eta ? '<br><span class="text-white/30">ETA '+r.eta+'</span>' : ''}</span>
+        </div>`;
+    });
+
+    // Data sources
+    const sl = document.getElementById('source-list');
+    S.dataSources.forEach(d => {
+      const dot = d.status === 'ACTIVE' ? 'bg-green-400' : d.status === 'CACHED' ? 'bg-amber-400' : 'bg-red-400';
+      sl.innerHTML += `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="stream-dot ${dot}"></span>
+            <span class="text-xs text-white/70">${d.name}</span>
+          </div>
+          <span class="text-xs font-mono text-white/30">${d.lastUpdate}</span>
+        </div>`;
+    });
+
+    // Distress feed (top 4)
+    const df = document.getElementById('distress-feed');
+    S.distressSignals.slice(0, 4).forEach(d => {
+      const border = d.severity === 'CRITICAL' ? 'border-red-500/40' : d.severity === 'HIGH' ? 'border-amber-500/40' : 'border-white/10';
+      const respIcon = d.responded ? '✓' : '!';
+      const respColor = d.responded ? 'text-green-400' : 'text-red-400';
+      df.innerHTML += `
+        <div class="border ${border} rounded-lg p-2.5 cursor-pointer hover:bg-white/5 transition-colors">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-xs text-white/70 leading-relaxed line-clamp-2">${d.text}</p>
+            <span class="${respColor} text-xs font-bold flex-shrink-0">${respIcon}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-1.5 text-xs text-white/30">
+            <span>${d.platform}</span><span>·</span><span>${d.time}</span>
+            <span>·</span><span class="font-mono">${Math.round(d.confidence*100)}% conf</span>
+          </div>
+        </div>`;
+    });
+
+    // LSTM Forecast Chart
+    const ctx = document.getElementById('forecast-chart').getContext('2d');
+    const labels = ['Now', '+15m', '+30m', '+45m', '+60m', '+75m', '+90m'];
+    const forecast = S.forecasts['G-INDUS-01'];
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Forecast',
+            data: forecast.map(f => f.val),
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+            pointRadius: 3,
+            pointBackgroundColor: '#ef4444'
+          },
+          {
+            label: 'Upper bound',
+            data: forecast.map(f => f.hi),
+            borderColor: 'rgba(239,68,68,0.3)',
+            borderWidth: 1,
+            borderDash: [4,4],
+            fill: '+1',
+            backgroundColor: 'rgba(239,68,68,0.05)',
+            tension: 0.4,
+            pointRadius: 0
+          },
+          {
+            label: 'Lower bound',
+            data: forecast.map(f => f.lo),
+            borderColor: 'rgba(239,68,68,0.3)',
+            borderWidth: 1,
+            borderDash: [4,4],
+            fill: false,
+            tension: 0.4,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: '#0b1628',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y.toLocaleString()} cusecs` }
+        }},
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'k' }, min: 440000, max: 650000 }
+        }
+      }
+    });
+
+    // Add critical threshold line annotation manually
+    const criticalY = 450000;
+  });
+  </script>
+</body>
+</html>

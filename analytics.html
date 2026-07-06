@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ML Analytics — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles/main.css"/>
+  <script>tailwind.config={theme:{extend:{colors:{radar:{400:'#2dd6f5',500:'#08bbd9'},surface:{900:'#060d18',800:'#0b1628',700:'#0f2040',600:'#142b55',500:'#1a3668'}},fontFamily:{mono:['JetBrains Mono','monospace'],sans:['Inter','sans-serif'],display:['Space Grotesk','sans-serif']}}}}</script>
+</head>
+<body class="bg-surface-900 text-white font-sans min-h-screen">
+  <header class="sticky top-0 z-50 bg-surface-800 border-b border-white/10 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <a href="index.html" class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg></div><span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span></a>
+      <nav class="hidden md:flex items-center gap-4 text-xs text-white/50">
+        <a href="dashboard.html" class="hover:text-white">Command</a><a href="map.html" class="hover:text-white">Map</a><a href="alerts.html" class="hover:text-white">Alerts</a><a href="analytics.html" class="text-radar-400 font-medium">Analytics</a><a href="reports.html" class="hover:text-white">Reports</a>
+      </nav>
+    </div>
+    <div class="font-mono text-xs text-white/60">PKT <span id="live-clock" class="text-white"></span></div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <div class="mb-8">
+      <h1 class="font-display text-3xl font-bold">ML Analytics</h1>
+      <p class="text-white/50 mt-1 text-sm">Four models running in parallel · Uncertainty-aware outputs · Calibrated confidence intervals</p>
+    </div>
+
+    <!-- Model status cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-surface-800 border border-purple-500/20 rounded-xl p-4">
+        <div class="text-purple-400 font-mono text-xs mb-2">MODEL 1</div>
+        <div class="font-display font-semibold text-sm mb-1">U-Net CNN</div>
+        <div class="text-white/40 text-xs mb-3">Flood extent · SAR</div>
+        <div class="text-2xl font-mono font-semibold text-green-400">0.89</div>
+        <div class="text-xs text-white/40 mt-0.5">IoU accuracy</div>
+      </div>
+      <div class="bg-surface-800 border border-red-500/20 rounded-xl p-4">
+        <div class="text-red-400 font-mono text-xs mb-2">MODEL 2</div>
+        <div class="font-display font-semibold text-sm mb-1">Bi-LSTM</div>
+        <div class="text-white/40 text-xs mb-3">Streamflow forecast</div>
+        <div class="text-2xl font-mono font-semibold text-amber-400">90min</div>
+        <div class="text-xs text-white/40 mt-0.5">forecast horizon</div>
+      </div>
+      <div class="bg-surface-800 border border-amber-500/20 rounded-xl p-4">
+        <div class="text-amber-400 font-mono text-xs mb-2">MODEL 3</div>
+        <div class="font-display font-semibold text-sm mb-1">Random Forest</div>
+        <div class="text-white/40 text-xs mb-3">Pop-at-risk scorer</div>
+        <div class="text-2xl font-mono font-semibold text-radar-400">0–100</div>
+        <div class="text-xs text-white/40 mt-0.5">vulnerability index</div>
+      </div>
+      <div class="bg-surface-800 border border-radar-500/20 rounded-xl p-4">
+        <div class="text-radar-400 font-mono text-xs mb-2">MODEL 4</div>
+        <div class="font-display font-semibold text-sm mb-1">BERTweet NLP</div>
+        <div class="text-white/40 text-xs mb-3">Distress classifier</div>
+        <div class="text-2xl font-mono font-semibold text-green-400">94%</div>
+        <div class="text-xs text-white/40 mt-0.5">avg. confidence</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+      <!-- LSTM Forecasts for all 3 gauges -->
+      <div class="bg-surface-800 border border-white/10 rounded-xl p-5">
+        <div class="font-display font-semibold mb-1">LSTM Streamflow Forecasts</div>
+        <div class="text-xs text-white/40 font-mono mb-1">Bidirectional LSTM · 20yr training · 350 stations · 3 active gauges</div>
+        <div class="text-xs text-white/30 mb-4">Shaded band = calibrated uncertainty interval (±1σ)</div>
+
+        <!-- Gauge selector -->
+        <div class="flex gap-2 mb-4">
+          <button class="gauge-tab text-xs px-3 py-1.5 rounded-lg border border-radar-500/40 bg-radar-500/10 text-radar-400 font-medium" data-gauge="0" onclick="selectGauge(0,this)">Indus Kotri</button>
+          <button class="gauge-tab text-xs px-3 py-1.5 rounded-lg border border-white/20 text-white/50 hover:border-white/40" data-gauge="1" onclick="selectGauge(1,this)">Phuleli Canal</button>
+          <button class="gauge-tab text-xs px-3 py-1.5 rounded-lg border border-white/20 text-white/50 hover:border-white/40" data-gauge="2" onclick="selectGauge(2,this)">Akram Wah</button>
+        </div>
+
+        <canvas id="lstm-chart" height="180"></canvas>
+        <div id="gauge-stats" class="mt-3 grid grid-cols-3 gap-3 text-xs"></div>
+      </div>
+
+      <!-- Vulnerability Scores -->
+      <div class="bg-surface-800 border border-white/10 rounded-xl p-5">
+        <div class="font-display font-semibold mb-1">Random Forest — Vulnerability Scores</div>
+        <div class="text-xs text-white/40 font-mono mb-4">Census block ranking · CDC SVI · ACS demographics</div>
+        <canvas id="vuln-chart" height="200"></canvas>
+      </div>
+
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Discharge history -->
+      <div class="bg-surface-800 border border-white/10 rounded-xl p-5">
+        <div class="font-display font-semibold mb-1">Indus at Kotri — 12hr Discharge History</div>
+        <div class="text-xs text-white/40 font-mono mb-4">USGS-equivalent gauge · cusecs</div>
+        <canvas id="history-chart" height="180"></canvas>
+        <div class="mt-3 flex gap-4 text-xs text-white/50">
+          <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 bg-blue-400 rounded"></div>Discharge</div>
+          <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 bg-red-500 rounded border-dashed border-t border-red-500"></div>Critical threshold</div>
+          <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 bg-amber-400 rounded"></div>Warning threshold</div>
+        </div>
+      </div>
+
+      <!-- Vulnerability feature breakdown -->
+      <div class="bg-surface-800 border border-white/10 rounded-xl p-5">
+        <div class="font-display font-semibold mb-1">Vulnerability Feature Breakdown</div>
+        <div class="text-xs text-white/40 font-mono mb-4">Top priority block: Qasimabad North (V:87)</div>
+        <div class="space-y-3" id="feature-bars"></div>
+        <div class="mt-5 pt-4 border-t border-white/10">
+          <div class="text-xs text-white/40 font-mono mb-3">FEATURE WEIGHTS (Random Forest)</div>
+          <canvas id="feature-importance" height="130"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="src/utils/sim.js"></script>
+  <script src="src/components/nav.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const S = window.SIM;
+    const chartDefaults = {
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0b1628', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }},
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } }
+      }
+    };
+
+    // Gauge data
+    const gaugeData = [
+      { gauge: S.gauges[0], color: '#ef4444', forecasts: S.forecasts['G-INDUS-01'], unit: 'cusecs' },
+      { gauge: S.gauges[1], color: '#f59e0b', forecasts: S.forecasts['G-INDUS-01'].map(f => ({ t:f.t, val:Math.round(f.val*0.0378), lo:Math.round(f.lo*0.038), hi:Math.round(f.hi*0.038) })), unit: 'cusecs' },
+      { gauge: S.gauges[2], color: '#a78bfa', forecasts: S.forecasts['G-INDUS-01'].map(f => ({ t:f.t, val:Math.round(f.val*0.0189), lo:Math.round(f.lo*0.019), hi:Math.round(f.hi*0.019) })), unit: 'cusecs' },
+    ];
+
+    let lstmChart;
+    function renderLSTM(idx) {
+      const gd = gaugeData[idx];
+      const f = gd.forecasts;
+      const labels = f.map(p => p.t === 0 ? 'Now' : `+${p.t}m`);
+      if (lstmChart) lstmChart.destroy();
+      const ctx = document.getElementById('lstm-chart').getContext('2d');
+      lstmChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label:'Forecast', data: f.map(p=>p.val), borderColor: gd.color, backgroundColor: gd.color+'18', borderWidth: 2.5, fill: false, tension: 0.4, pointRadius: 4, pointBackgroundColor: gd.color },
+          { label:'Upper', data: f.map(p=>p.hi), borderColor: gd.color+'50', borderWidth: 1, borderDash:[4,4], fill:'+1', backgroundColor: gd.color+'0d', tension:0.4, pointRadius:0 },
+          { label:'Lower', data: f.map(p=>p.lo), borderColor: gd.color+'50', borderWidth: 1, borderDash:[4,4], fill:false, tension:0.4, pointRadius:0 }
+        ]},
+        options: { ...chartDefaults, responsive: true, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } } } }
+      });
+
+      // Stats
+      const gs = document.getElementById('gauge-stats');
+      const g = gd.gauge;
+      const color = g.current >= g.threshold.critical ? 'text-red-400' : g.current >= g.threshold.warning ? 'text-amber-400' : 'text-green-400';
+      gs.innerHTML = `
+        <div class="bg-surface-700 rounded-lg p-2.5"><div class="font-mono text-xs ${color}">${g.current.toLocaleString()}</div><div class="text-white/40 text-xs">Current (cusecs)</div></div>
+        <div class="bg-surface-700 rounded-lg p-2.5"><div class="font-mono text-xs text-red-400">${g.threshold.critical.toLocaleString()}</div><div class="text-white/40 text-xs">Critical threshold</div></div>
+        <div class="bg-surface-700 rounded-lg p-2.5"><div class="font-mono text-xs ${g.trend==='rising'?'text-red-400':'text-green-400'}">${g.trend==='rising'?'↑':g.trend==='falling'?'↓':'→'} ${g.changePct > 0 ? '+':''}${g.changePct}%</div><div class="text-white/40 text-xs">2hr change</div></div>`;
+    }
+
+    window.selectGauge = (idx, btn) => {
+      document.querySelectorAll('.gauge-tab').forEach(b => { b.className = 'gauge-tab text-xs px-3 py-1.5 rounded-lg border border-white/20 text-white/50 hover:border-white/40'; });
+      btn.className = 'gauge-tab text-xs px-3 py-1.5 rounded-lg border border-radar-500/40 bg-radar-500/10 text-radar-400 font-medium';
+      renderLSTM(idx);
+    };
+    renderLSTM(0);
+
+    // Vulnerability chart
+    const blocks = S.censusBlocks;
+    new Chart(document.getElementById('vuln-chart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: blocks.map(b => b.name.split(' ')[0]),
+        datasets: [{
+          data: blocks.map(b => b.vuln),
+          backgroundColor: blocks.map(b => b.vuln>75?'rgba(239,68,68,0.7)':b.vuln>50?'rgba(245,158,11,0.7)':'rgba(34,197,94,0.7)'),
+          borderColor: blocks.map(b => b.vuln>75?'#ef4444':b.vuln>50?'#f59e0b':'#22c55e'),
+          borderWidth: 1, borderRadius: 4
+        }]
+      },
+      options: { ...chartDefaults, responsive: true, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100, ticks: { ...chartDefaults.scales.y.ticks, callback: v => v } } }, plugins: { ...chartDefaults.plugins, tooltip: { ...chartDefaults.plugins.tooltip, callbacks: { label: c => ` Vulnerability: ${c.parsed.y}/100` } } } }
+    });
+
+    // Discharge history
+    const histLabels = Array.from({length:12},(_, i)=>{ const h=new Date(Date.now()-SIM.incident.started-(12-i)*3600000+SIM.incident.started); return (new Date(Date.now()-(12-i)*3600000)).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',hour12:false}); });
+    const histData = S.generateGaugeHistory(487230, 12);
+    new Chart(document.getElementById('history-chart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: histLabels,
+        datasets: [
+          { data: histData, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#60a5fa' },
+          { data: Array(12).fill(450000), borderColor: 'rgba(239,68,68,0.7)', borderWidth: 1.5, borderDash:[6,4], fill:false, pointRadius:0 },
+          { data: Array(12).fill(380000), borderColor: 'rgba(245,158,11,0.7)', borderWidth: 1, borderDash:[4,3], fill:false, pointRadius:0 }
+        ]
+      },
+      options: { ...chartDefaults, responsive:true, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => (v/1000).toFixed(0)+'k' } } } }
+    });
+
+    // Feature bars
+    const topBlock = S.censusBlocks[0];
+    const features = [
+      { label: 'No vehicle access', value: topBlock.noVehicle, color: 'bg-red-500' },
+      { label: 'Low income households', value: topBlock.lowIncome, color: 'bg-amber-500' },
+      { label: 'Age 65+', value: topBlock.age65, color: 'bg-purple-500' },
+      { label: 'Disability status', value: topBlock.disabled, color: 'bg-blue-500' },
+    ];
+    const fb = document.getElementById('feature-bars');
+    features.forEach(f => {
+      fb.innerHTML += `<div>
+        <div class="flex items-center justify-between text-xs mb-1"><span class="text-white/60">${f.label}</span><span class="font-mono text-white">${f.value}%</span></div>
+        <div class="h-2 bg-surface-700 rounded-full overflow-hidden"><div class="${f.color} h-full rounded-full vuln-bar" style="width:${f.value}%"></div></div>
+      </div>`;
+    });
+
+    // Feature importance chart
+    new Chart(document.getElementById('feature-importance').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: ['No vehicle','Low income','Age 65+','Disability','Language'],
+        datasets: [{ data: [0.31, 0.27, 0.22, 0.14, 0.06], backgroundColor: ['rgba(239,68,68,0.7)','rgba(245,158,11,0.7)','rgba(167,139,250,0.7)','rgba(96,165,250,0.7)','rgba(34,197,94,0.7)'], borderRadius: 3 }]
+      },
+      options: { ...chartDefaults, indexAxis:'y', responsive:true, scales: { x: { ...chartDefaults.scales.x, max:0.4, ticks: { ...chartDefaults.scales.x.ticks, callback: v => `${(v*100).toFixed(0)}%` } }, y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, font:{size:10} } } } }
+    });
+  });
+  </script>
+</body>
+</html>
