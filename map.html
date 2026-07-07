@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Globe Map — FloodSense AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles/main.css"/>
+  <script>tailwind.config={theme:{extend:{colors:{radar:{400:'#2dd6f5',500:'#08bbd9'},surface:{900:'#060d18',800:'#0b1628',700:'#0f2040'}},fontFamily:{mono:['JetBrains Mono','monospace'],sans:['Inter','sans-serif'],display:['Space Grotesk','sans-serif']}}}}</script>
+  <style>
+    body,html{margin:0;padding:0;}
+    #globe-wrap{position:relative;width:100%;height:100%;background:radial-gradient(ellipse at 30% 30%,#0a1a35 0%,#060d18 70%);}
+    #gc{display:block;}
+    .tip{position:absolute;background:rgba(5,12,24,0.95);border:1px solid rgba(45,214,245,0.3);border-radius:10px;padding:10px 14px;font-size:11px;pointer-events:none;z-index:300;min-width:210px;display:none;backdrop-filter:blur(16px);box-shadow:0 4px 30px rgba(8,187,217,0.2);}
+    .lbtn{width:100%;display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 10px;font-size:11px;text-align:left;background:transparent;color:rgba(255,255,255,0.55);cursor:pointer;transition:all .2s;font-family:'Inter',sans-serif;}
+    .lbtn:hover{background:rgba(255,255,255,0.06);color:#fff;}
+    .lbtn.on{background:rgba(8,187,217,0.15);border-color:rgba(8,187,217,0.4);color:#2dd6f5;}
+    .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    .loc-btn{width:100%;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,0.07);border-radius:7px;padding:6px 10px;font-size:11px;background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;transition:all .2s;font-family:'Inter',sans-serif;}
+    .loc-btn:hover{background:rgba(45,214,245,0.08);border-color:rgba(45,214,245,0.3);color:#2dd6f5;}
+    /* HTML marker labels rendered over canvas */
+    .map-label{position:absolute;pointer-events:none;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;z-index:200;}
+    .map-label .pin-dot{width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,0.9);box-shadow:0 0 8px currentColor;margin-bottom:1px;}
+    .map-label .pin-line{width:2px;height:18px;background:rgba(255,255,255,0.6);}
+  </style>
+</head>
+<body class="bg-surface-900 text-white font-sans flex flex-col h-screen overflow-hidden">
+
+<!-- NAV -->
+<header class="flex-shrink-0 bg-surface-800 border-b border-white/10 px-4 py-2.5 flex items-center justify-between z-50">
+  <div class="flex items-center gap-4">
+    <a href="index.html" class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-md bg-radar-500 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg></div>
+      <span class="font-display font-bold text-sm">FloodSense<span class="text-radar-400"> AI</span></span>
+    </a>
+    <nav class="hidden md:flex items-center gap-4 text-xs text-white/50">
+      <a href="dashboard.html" class="hover:text-white">Command</a>
+      <a href="map.html" class="text-radar-400 font-medium">Globe Map</a>
+      <a href="alerts.html" class="hover:text-white">Alerts</a>
+      <a href="analytics.html" class="hover:text-white">Analytics</a>
+      <a href="reports.html" class="hover:text-white">Reports</a>
+    </nav>
+  </div>
+  <div class="flex items-center gap-3">
+    <span id="coords-hud" class="font-mono text-xs text-white/30 hidden md:block">—</span>
+    <div class="font-mono text-xs text-white/55">PKT <span id="live-clock" class="text-white"></span></div>
+    <span class="font-mono text-xs px-3 py-1 rounded-full" style="background:rgba(8,187,217,0.15);border:1px solid rgba(8,187,217,0.35);color:#2dd6f5">Sentinel-1 · LIVE</span>
+  </div>
+</header>
+
+<div style="display:flex;flex:1;overflow:hidden;">
+
+  <!-- SIDEBAR -->
+  <div style="width:248px;flex-shrink:0;background:#0b1628;border-right:1px solid rgba(255,255,255,0.07);overflow-y:auto;display:flex;flex-direction:column;">
+
+    <div style="padding:14px;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div class="font-mono text-xs mb-3" style="color:rgba(255,255,255,0.35);letter-spacing:.05em">GLOBE CONTROLS</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button id="rot-btn" class="lbtn on" onclick="toggleRotation()">
+          <svg style="width:13px;height:13px;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Auto-rotate: ON
+        </button>
+        <button class="lbtn" style="border-color:rgba(45,214,245,0.35);color:#2dd6f5;background:rgba(8,187,217,0.1)" onclick="flyTo('sindh')">
+          <svg style="width:13px;height:13px;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+          Focus: Active Incident
+        </button>
+        <button class="lbtn" onclick="flyTo('world')">
+          <svg style="width:13px;height:13px;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064"/></svg>
+          Global view
+        </button>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="text-xs mb-1.5" style="color:rgba(255,255,255,0.25);">Rotation speed</div>
+        <input type="range" id="spd" min="0.05" max="2.5" step="0.05" value="0.7" style="width:100%;accent-color:#08bbd9" oninput="setSpeed(this.value)">
+        <div class="flex justify-between text-xs mt-1" style="color:rgba(255,255,255,0.2)"><span>Slow</span><span>Fast</span></div>
+      </div>
+    </div>
+
+    <div style="padding:14px;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div class="font-mono text-xs mb-3" style="color:rgba(255,255,255,0.35);letter-spacing:.05em">JUMP TO LOCATION</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <button class="loc-btn" onclick="flyTo('sindh')"><span>📍 Sindh, Pakistan</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">25.4°N 68.4°E</span></button>
+        <button class="loc-btn" onclick="flyTo('dhaka')"><span>📍 Dhaka, Bangladesh</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">23.7°N 90.4°E</span></button>
+        <button class="loc-btn" onclick="flyTo('jakarta')"><span>📍 Jakarta, Indonesia</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">6.2°S 107°E</span></button>
+        <button class="loc-btn" onclick="flyTo('houston')"><span>📍 Houston, USA</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">29.7°N 95.4°W</span></button>
+        <button class="loc-btn" onclick="flyTo('london')"><span>📍 London, UK</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">51.5°N 0.1°W</span></button>
+        <button class="loc-btn" onclick="flyTo('nigeria')"><span>📍 Niger Delta</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">5.0°N 6.0°E</span></button>
+        <button class="loc-btn" onclick="flyTo('amazon')"><span>📍 Amazon Basin</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">3°S 60°W</span></button>
+        <button class="loc-btn" onclick="flyTo('wuhan')"><span>📍 Yangtze, China</span><span class="font-mono text-xs" style="color:rgba(255,255,255,0.2)">30.5°N 114°E</span></button>
+      </div>
+    </div>
+
+    <div style="padding:14px;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div class="font-mono text-xs mb-3" style="color:rgba(255,255,255,0.35);letter-spacing:.05em">MAP LAYERS</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="lbtn on" id="l-flood"      onclick="toggleLayer('flood',this)"><div class="dot" style="background:#ef4444;box-shadow:0 0 5px #ef4444"></div>Active flood zones</button>
+        <button class="lbtn on" id="l-distress"   onclick="toggleLayer('distress',this)"><div class="dot" style="background:#f59e0b;box-shadow:0 0 5px #f59e0b"></div>Distress signals</button>
+        <button class="lbtn on" id="l-resources"  onclick="toggleLayer('resources',this)"><div class="dot" style="background:#3b82f6;box-shadow:0 0 5px #3b82f6"></div>Rescue resources</button>
+        <button class="lbtn on" id="l-historical" onclick="toggleLayer('historical',this)"><div class="dot" style="background:#a78bfa;box-shadow:0 0 5px #a78bfa"></div>Global flood history</button>
+        <button class="lbtn on" id="l-atm"        onclick="toggleLayer('atm',this)"><div class="dot" style="background:rgba(96,165,250,0.6)"></div>Atmosphere</button>
+      </div>
+    </div>
+
+    <div style="padding:14px;">
+      <div class="font-mono text-xs mb-3" style="color:rgba(255,255,255,0.35);letter-spacing:.05em">LEGEND</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:11px;color:rgba(255,255,255,0.5)">
+        <div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444"></div>Critical flood · Active incident</div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b"></div>Unresponded distress call</div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:#22c55e;box-shadow:0 0 6px #22c55e"></div>Distress — team dispatched</div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6"></div>Rescue resource deployed</div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:#a78bfa;box-shadow:0 0 6px #a78bfa"></div>Historical flood event</div>
+      </div>
+      <div class="text-xs mt-4" style="color:rgba(255,255,255,0.22);line-height:1.8">Drag to rotate · Scroll to zoom<br>Hover marker for details</div>
+    </div>
+  </div>
+
+  <!-- GLOBE AREA -->
+  <div id="globe-wrap" style="flex:1;position:relative;overflow:hidden;">
+    <canvas id="gc"></canvas>
+
+    <!-- HTML marker overlay container -->
+    <div id="marker-overlay" style="position:absolute;inset:0;pointer-events:none;z-index:100;overflow:hidden;"></div>
+
+    <!-- Tooltip -->
+    <div id="tip" class="tip"></div>
+
+    <!-- Incident card -->
+    <div style="position:absolute;top:16px;right:16px;background:rgba(6,13,24,0.93);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;font-size:11px;backdrop-filter:blur(14px);min-width:210px;z-index:150;">
+      <div class="font-mono text-xs mb-2" style="color:#2dd6f5;letter-spacing:.05em">ACTIVE INCIDENT</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:rgba(255,255,255,0.4)">Location:</span><span class="font-mono">25.41°N, 68.37°E</span></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:rgba(255,255,255,0.4)">Region:</span><span>Sindh, Pakistan</span></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:rgba(255,255,255,0.4)">At risk:</span><span class="font-mono" style="color:#f59e0b">81,500</span></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:rgba(255,255,255,0.4)">Flood map:</span><span class="font-mono" style="color:#22c55e">0.89 IoU</span></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:rgba(255,255,255,0.4)">Signals:</span><span class="font-mono" style="color:#ef4444">47 active</span></div>
+      </div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(6,13,24,0.88);border:1px solid rgba(255,255,255,0.1);border-radius:30px;padding:7px 22px;font-size:11px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,0.4);backdrop-filter:blur(12px);white-space:nowrap;display:flex;align-items:center;gap:14px;z-index:150;">
+      <span style="color:#2dd6f5;">🌍 Global flood monitoring active</span>
+      <span style="color:rgba(255,255,255,0.15)">|</span>
+      <span id="marker-count">— markers</span>
+      <span style="color:rgba(255,255,255,0.15)">|</span>
+      <span>Drag · Scroll to zoom</span>
+    </div>
+  </div>
+</div>
+
+<script src="src/utils/sim.js"></script>
+<script src="src/components/nav.js"></script>
+<script>
+(function(){
+'use strict';
+
+// ── Config ───────────────────────────────────────────────────────────────────
+const R = 1.0;
+const S = window.SIM;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let renderer, scene, camera, earthMesh, cloudMesh, atmMesh;
+let rotY = 0, rotX = 0, targetRotY = 0, targetRotX = 0;
+let zoom = 2.3, targetZoom = 2.3;
+let dragging = false, lastMX = 0, lastMY = 0;
+let isRotating = true, rotSpd = 0.0007;
+let pulse = 0;
+let layers = { flood:true, distress:true, resources:true, historical:true, atm:true };
+
+// Pin data: lat, lng, color (hex string), label, detail, type
+const PINS = [
+  // Flood census blocks
+  ...S.censusBlocks.map(b => ({
+    lat:b.lat, lng:b.lng, type:'flood',
+    col: b.vuln>75?'#ef4444': b.vuln>50?'#f59e0b':'#22c55e',
+    glow:b.vuln>75?'239,68,68': b.vuln>50?'245,158,11':'34,197,94',
+    label:b.name, detail:`${b.status} · Pop ${b.pop.toLocaleString()} · Vuln ${b.vuln}/100 · ${b.floodDepth}m`
+  })),
+  // Distress signals
+  ...S.distressSignals.map(d => ({
+    lat:d.lat, lng:d.lng, type:'distress',
+    col: d.responded?'#22c55e':'#f59e0b',
+    glow:d.responded?'34,197,94':'245,158,11',
+    label:`${d.severity} Distress`, detail:`"${d.text.substring(0,60)}…" · ${d.platform} · ${Math.round(d.confidence*100)}% conf · ${d.responded?'✓ Responded':'! Awaiting'}`
+  })),
+  // Resources
+  ...S.resources.map(r => ({
+    lat:r.lat, lng:r.lng, type:'resources',
+    col:'#3b82f6', glow:'59,130,246',
+    label:r.unit, detail:`${r.type} · ${r.status}${r.eta?' · ETA '+r.eta:''}`
+  })),
+  // Global historical
+  {lat:23.8,  lng:90.4,   type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Bangladesh Floods 2024',    detail:'5.4M affected · Annual monsoon event'},
+  {lat:15.5,  lng:32.5,   type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Sudan Nile Floods 2024',    detail:'300k displaced · Nile basin overflow'},
+  {lat:29.7,  lng:-95.4,  type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Houston Harvey 2017',       detail:'Category 4 · $125B damage'},
+  {lat:5.0,   lng:6.0,    type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Niger Delta Flooding',      detail:'600k affected annually'},
+  {lat:-3.0,  lng:-60.0,  type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Amazon Basin 2021',         detail:'400k affected · Record river levels'},
+  {lat:6.2,   lng:106.8,  type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Jakarta Floods 2020',       detail:'Sea level rise risk · Annual flooding'},
+  {lat:30.5,  lng:114.3,  type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Yangtze Floods 2020',       detail:'Record Yangtze water levels'},
+  {lat:51.5,  lng:-0.1,   type:'historical', col:'#a78bfa', glow:'167,139,250', label:'Thames Barrier, London',    detail:'Active tidal flood defence since 1982'},
+];
+
+// ── Lat/Lng → 3D unit vector ─────────────────────────────────────────────────
+function ll2v(lat, lng) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const tht = (lng + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -Math.sin(phi) * Math.cos(tht),
+     Math.cos(phi),
+     Math.sin(phi) * Math.sin(tht)
+  );
+}
+
+// ── Project a 3D point → screen XY ──────────────────────────────────────────
+function project(vec3, W, H) {
+  const v = vec3.clone().project(camera);
+  return { x: (v.x + 1) / 2 * W, y: (-v.y + 1) / 2 * H, z: v.z };
+}
+
+// ── Build Earth texture on canvas ────────────────────────────────────────────
+function makeEarthTex() {
+  const W = 2048, H = 1024;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Ocean
+  const og = ctx.createLinearGradient(0, 0, 0, H);
+  og.addColorStop(0,   '#0b2d6b');
+  og.addColorStop(0.5, '#0e3575');
+  og.addColorStop(1,   '#081f52');
+  ctx.fillStyle = og; ctx.fillRect(0, 0, W, H);
+
+  // Helper: draw land polygon [lng, lat] pairs
+  function land(pts, col, alpha) {
+    ctx.save();
+    if (alpha !== undefined) ctx.globalAlpha = alpha;
+    ctx.fillStyle = col;
+    ctx.strokeStyle = 'rgba(80,160,80,0.35)'; ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    pts.forEach(([lng, lat], i) => {
+      const x = (lng + 180) / 360 * W;
+      const y = (90 - lat) / 180 * H;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  const G = '#1b5e30', G2 = '#1e6835', G3 = '#164e29', DST = '#5a6e2a', ICE = '#ccd9e3';
+
+  // ── NORTH AMERICA ─────────────────────────────────────────────────────────
+  land([[-168,72],[-140,70],[-110,73],[-83,70],[-75,62],[-64,47],[-52,46],[-66,44],[-70,41],[-75,35],[-80,25],[-87,16],[-77,8],[-83,10],[-90,16],[-92,18],[-90,21],[-104,20],[-109,23],[-117,30],[-117,32],[-120,37],[-124,49],[-130,54],[-140,58],[-155,58],[-165,62],[-168,66],[-168,72]], G);
+  // Florida
+  land([[-80,25],[-82,29],[-80,30],[-81,25],[-80,25]], G2);
+  // Greenland
+  land([[-73,76],[-35,83],[-17,80],[-20,70],[-44,60],[-52,65],[-60,68],[-66,72],[-73,76]], G3, 0.8);
+  // Baja
+  land([[-117,30],[-109,23],[-110,28],[-117,30]], G2);
+  // Cuba
+  land([[-85,22],[-74,20],[-74,23],[-85,22]], G2);
+
+  // ── CENTRAL AMERICA ───────────────────────────────────────────────────────
+  land([[-90,16],[-84,10],[-78,8],[-77,8],[-82,8],[-86,14],[-90,16]], G2);
+
+  // ── SOUTH AMERICA ─────────────────────────────────────────────────────────
+  land([[-82,8],[-60,13],[-52,4],[-34,-6],[-34,-12],[-38,-16],[-42,-22],[-48,-28],[-52,-32],[-58,-38],[-62,-51],[-68,-55],[-72,-50],[-76,-46],[-72,-40],[-72,-30],[-70,-18],[-75,-10],[-80,-2],[-80,0],[-77,1],[-77,8],[-82,8]], G2);
+
+  // ── EUROPE ────────────────────────────────────────────────────────────────
+  land([[-10,36],[0,36],[5,43],[8,46],[15,47],[18,40],[24,38],[28,42],[30,46],[28,56],[22,60],[15,66],[5,62],[0,54],[-5,48],[-10,44],[-10,36]], G);
+  // Scandinavia
+  land([[5,58],[6,62],[14,68],[28,72],[30,68],[28,64],[24,58],[14,56],[8,56],[5,58]], G);
+  // Iberia
+  land([[-10,44],[-9,36],[0,36],[-2,44],[-10,44]], G2);
+  // UK
+  land([[-5,50],[2,52],[0,59],[-5,58],[-5,50]], G3);
+  // Ireland
+  land([[-10,52],[-6,52],[-6,54],[-10,54],[-10,52]], G3);
+  // Iceland
+  land([[-25,63],[-12,66],[-14,64],[-25,63]], G3);
+
+  // ── AFRICA ────────────────────────────────────────────────────────────────
+  land([[-17,15],[0,5],[10,4],[18,4],[22,2],[32,-2],[40,0],[42,11],[44,11],[52,12],[44,12],[40,15],[36,22],[32,30],[30,26],[25,22],[18,20],[12,14],[4,6],[0,5],[-17,15]], G2);
+  land([[32,-2],[35,-8],[32,-12],[28,-18],[26,-24],[20,-26],[18,-30],[16,-34],[22,-36],[28,-32],[32,-28],[36,-20],[40,-10],[40,0],[32,-2]], G2);
+  // Sahara
+  land([[0,15],[18,20],[25,22],[18,20],[12,14],[4,6],[0,5],[-17,15],[-5,18],[0,15]], DST, 0.75);
+  // Madagascar
+  land([[44,-12],[50,-14],[50,-24],[44,-24],[44,-12]], G2);
+
+  // ── MIDDLE EAST / ARABIA ─────────────────────────────────────────────────
+  land([[32,30],[36,37],[40,38],[44,42],[50,42],[56,26],[60,22],[58,14],[50,12],[44,11],[40,15],[36,22],[32,30]], DST);
+  // Turkey
+  land([[26,40],[30,42],[36,42],[42,40],[44,38],[40,36],[36,36],[30,36],[26,40]], G2);
+  // Iran
+  land([[44,38],[56,38],[62,26],[60,22],[56,26],[44,28],[40,36],[44,38]], DST);
+
+  // ── SOUTH ASIA ────────────────────────────────────────────────────────────
+  // India
+  land([[66,24],[70,22],[76,8],[80,8],[80,12],[82,18],[86,20],[90,22],[90,26],[86,28],[80,28],[76,28],[72,24],[66,24]], G2);
+  // Pakistan (highlighted green for incident)
+  land([[60,24],[66,24],[72,24],[76,28],[72,34],[68,36],[64,36],[60,30],[60,24]], '#1e7a3e');
+  // Sindh province highlight
+  land([[66,24],[70,28],[68,30],[64,28],[63,25],[66,24]], '#22a845', 0.9);
+  // Bangladesh
+  land([[88,22],[92,22],[92,24],[90,26],[88,22]], G2);
+  // Sri Lanka
+  land([[80,8],[82,8],[82,6],[80,6],[80,8]], G3);
+  // Nepal
+  land([[80,28],[86,28],[88,28],[84,28],[80,28]], G3);
+
+  // ── SOUTHEAST ASIA ────────────────────────────────────────────────────────
+  land([[98,18],[104,14],[108,12],[104,10],[100,6],[98,8],[100,12],[98,18]], G2);
+  land([[104,22],[108,16],[106,10],[104,10],[102,14],[104,22]], G2);
+  land([[100,6],[108,2],[110,-6],[102,-6],[96,2],[96,5],[100,6]], G2);
+  land([[105,-6],[112,-6],[114,-8],[108,-8],[105,-6]], G2);
+  land([[108,6],[118,6],[118,-4],[110,-4],[108,2],[108,6]], G2);
+  land([[118,18],[122,18],[122,8],[118,8],[118,18]], G2);
+
+  // ── EAST ASIA ─────────────────────────────────────────────────────────────
+  land([[100,22],[108,22],[116,24],[122,28],[122,32],[118,38],[116,40],[120,42],[124,46],[126,52],[128,56],[132,48],[140,42],[142,40],[138,34],[136,34],[130,30],[124,26],[116,22],[112,18],[108,22],[100,22]], G);
+  // Korea
+  land([[124,38],[128,38],[130,34],[126,34],[124,38]], G2);
+  // Japan
+  land([[130,32],[134,34],[138,36],[142,40],[140,44],[134,44],[130,40],[128,36],[130,32]], G2);
+  land([[140,44],[144,44],[146,42],[140,42],[140,44]], G2);
+  // Taiwan
+  land([[120,22],[122,22],[122,24],[120,24],[120,22]], G3);
+
+  // ── CENTRAL / NORTH ASIA ─────────────────────────────────────────────────
+  land([[44,42],[56,44],[68,42],[80,44],[86,50],[80,54],[66,56],[50,56],[44,50],[44,42]], G3);
+  land([[86,50],[100,50],[114,50],[116,48],[104,42],[92,42],[86,46],[86,50]], DST, 0.7);
+  land([[28,70],[50,74],[80,74],[100,76],[130,72],[160,70],[168,66],[160,54],[146,46],[140,44],[134,44],[130,56],[118,60],[100,58],[86,60],[66,60],[50,56],[44,58],[36,64],[28,70]], G3);
+  // Kamchatka
+  land([[160,70],[170,68],[168,56],[162,52],[156,52],[158,56],[160,60],[160,70]], G3);
+
+  // ── OCEANIA ───────────────────────────────────────────────────────────────
+  // Australia West
+  land([[114,-22],[122,-18],[130,-12],[136,-12],[138,-16],[136,-24],[132,-32],[118,-34],[114,-32],[112,-26],[114,-22]], DST);
+  // Australia East
+  land([[136,-12],[138,-12],[142,-10],[148,-18],[152,-24],[150,-38],[144,-38],[138,-36],[132,-32],[136,-24],[136,-12]], G2);
+  // NZ
+  land([[166,-46],[172,-46],[174,-42],[172,-36],[168,-38],[166,-42],[166,-46]], G3);
+  land([[172,-36],[178,-38],[178,-42],[174,-42],[172,-36]], G3);
+  // PNG
+  land([[132,-2],[142,-4],[148,-6],[146,-8],[140,-8],[134,-4],[132,-2]], G2);
+
+  // ── ICE CAPS ─────────────────────────────────────────────────────────────
+  land([[-180,76],[180,76],[180,90],[-180,90]], ICE, 0.8);
+  land([[-180,-68],[180,-68],[180,-90],[-180,-90]], ICE, 0.85);
+
+  // ── ACTIVE FLOOD GLOW (Sindh) ─────────────────────────────────────────────
+  {
+    const fx = (68.37+180)/360*W, fy = (90-25.41)/180*H;
+    for (let i = 0; i < 3; i++) {
+      const r = 30 + i*25;
+      const gr = ctx.createRadialGradient(fx,fy,0,fx,fy,r);
+      gr.addColorStop(0, `rgba(239,68,68,${0.7-i*0.2})`);
+      gr.addColorStop(1, 'rgba(239,68,68,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // ── LAT/LNG GRID ─────────────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(45,214,245,0.10)'; ctx.lineWidth = 0.7;
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const y = (90-lat)/180*H;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  for (let lng = -150; lng <= 180; lng += 30) {
+    const x = (lng+180)/360*W;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  // Equator brighter
+  ctx.strokeStyle = 'rgba(45,214,245,0.20)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+
+  // ── SPECULAR ─────────────────────────────────────────────────────────────
+  const sg = ctx.createRadialGradient(W*0.33,H*0.28,0,W*0.33,H*0.28,W*0.28);
+  sg.addColorStop(0, 'rgba(255,255,255,0.07)');
+  sg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sg; ctx.fillRect(0,0,W,H);
+
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Cloud texture ─────────────────────────────────────────────────────────────
+function makeCloudTex() {
+  const W=1024, H=512;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const ctx=c.getContext('2d'); ctx.clearRect(0,0,W,H);
+  const clouds=[[200,120,70],[420,80,55],[650,130,65],[830,90,50],[950,200,60],[160,300,45],[520,350,75],[770,280,55],[1010,320,65],[310,430,50],[670,430,70],[100,210,42],[460,200,52],[870,380,60],[710,160,48],[260,60,44],[580,460,55],[940,430,52]];
+  clouds.forEach(([x,y,r])=>{
+    const g=ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,'rgba(255,255,255,0.6)');
+    g.addColorStop(0.5,'rgba(255,255,255,0.25)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(x,y,r*1.6,r*0.55,Math.random()*0.4,0,Math.PI*2); ctx.fill();
+  });
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  const wrap = document.getElementById('globe-wrap');
+  const cv   = document.getElementById('gc');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+
+  renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x000000, 0);
+
+  scene  = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, W/H, 0.01, 100);
+  camera.position.z = zoom;
+
+  // Stars
+  const sg = new THREE.BufferGeometry();
+  const sp = [];
+  for (let i=0;i<3500;i++){
+    const th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1), r=40+Math.random()*15;
+    sp.push(r*Math.sin(ph)*Math.cos(th), r*Math.cos(ph), r*Math.sin(ph)*Math.sin(th));
+  }
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sp,3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffffff,size:0.07,transparent:true,opacity:0.75})));
+
+  // Earth
+  earthMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 96, 96),
+    new THREE.MeshPhongMaterial({
+      map: makeEarthTex(),
+      specular: new THREE.Color(0x1a3a6a),
+      shininess: 20,
+      emissive: new THREE.Color(0x020608),
+      emissiveIntensity: 1
+    })
+  );
+  scene.add(earthMesh);
+
+  // Clouds
+  cloudMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R*1.008, 48, 48),
+    new THREE.MeshPhongMaterial({map:makeCloudTex(), transparent:true, opacity:0.42, depthWrite:false})
+  );
+  scene.add(cloudMesh);
+
+  // Atmosphere
+  atmMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R*1.07, 32, 32),
+    new THREE.MeshPhongMaterial({color:0x1155cc, transparent:true, opacity:0.12, side:THREE.BackSide})
+  );
+  scene.add(atmMesh);
+
+  // Outer glow
+  scene.add(new THREE.Mesh(
+    new THREE.SphereGeometry(R*1.18, 32, 32),
+    new THREE.MeshPhongMaterial({color:0x0055bb, transparent:true, opacity:0.04, side:THREE.BackSide})
+  ));
+
+  // Lights
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.3);
+  sun.position.set(6, 2, 4); scene.add(sun);
+  scene.add(new THREE.AmbientLight(0x192840, 2.4));
+  const fill = new THREE.DirectionalLight(0x0033aa, 0.3);
+  fill.position.set(-5,-2,-3); scene.add(fill);
+
+  // Start on Sindh
+  rotY = -68.37 * Math.PI/180;
+  rotX = -25.41 * Math.PI/180 * 0.45;
+  targetRotY = rotY; targetRotX = rotX;
+
+  // Events
+  const c2 = wrap;
+  cv.addEventListener('mousedown', e=>{dragging=true;isRotating=false;lastMX=e.clientX;lastMY=e.clientY;updateRotBtn();cv.style.cursor='grabbing';});
+  cv.addEventListener('mouseup',   ()=>{dragging=false;cv.style.cursor='grab';});
+  cv.addEventListener('mouseleave',()=>{dragging=false;});
+  cv.addEventListener('mousemove', onMove);
+  cv.addEventListener('wheel', e=>{targetZoom=Math.max(1.3,Math.min(4.0,targetZoom+e.deltaY*0.002));},{passive:true});
+  cv.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;isRotating=false;lastMX=e.touches[0].clientX;lastMY=e.touches[0].clientY;}},{passive:true});
+  cv.addEventListener('touchmove', e=>{
+    if(!dragging||e.touches.length!==1) return;
+    e.preventDefault();
+    const dx=e.touches[0].clientX-lastMX, dy=e.touches[0].clientY-lastMY;
+    targetRotY+=dx*0.007; targetRotX=Math.max(-0.7,Math.min(0.7,targetRotX+dy*0.005));
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+  },{passive:false});
+  cv.addEventListener('touchend',()=>dragging=false);
+  window.addEventListener('resize', onResize);
+
+  cv.style.cursor='grab';
+  animate();
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  pulse += 0.022;
+
+  if (isRotating) targetRotY += rotSpd;
+
+  rotY += (targetRotY - rotY) * 0.07;
+  rotX += (targetRotX - rotX) * 0.07;
+  zoom += (targetZoom - zoom) * 0.08;
+  camera.position.z = zoom;
+
+  earthMesh.rotation.y = rotY;
+  earthMesh.rotation.x = rotX;
+  cloudMesh.rotation.y = rotY + pulse * 0.0012;
+  cloudMesh.rotation.x = rotX;
+  atmMesh.rotation.y   = rotY;
+  atmMesh.material.opacity = 0.09 + 0.025*Math.sin(pulse*0.35);
+
+  updateMarkerOverlay();
+  renderer.render(scene, camera);
+}
+
+// ── HTML marker overlay ───────────────────────────────────────────────────────
+// This projects 3D pin positions → 2D screen and places HTML elements.
+// Ensures markers are always visible, properly sized, and face the camera.
+let markerEls = [];
+
+function buildMarkerElements() {
+  const overlay = document.getElementById('marker-overlay');
+  overlay.innerHTML = '';
+  markerEls = [];
+
+  const visible = PINS.filter(p => layers[p.type]);
+  document.getElementById('marker-count').textContent = `${visible.length} markers visible`;
+
+  visible.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:absolute;pointer-events:auto;cursor:pointer;transition:opacity .2s;`;
+
+    // Outer ring (pulse animation via CSS)
+    el.innerHTML = `
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%)">
+        <div class="pin-head" style="
+          width:14px;height:14px;border-radius:50%;
+          background:${p.col};
+          border:2.5px solid rgba(255,255,255,0.9);
+          box-shadow:0 0 10px 3px rgba(${p.glow},0.7), 0 0 20px 6px rgba(${p.glow},0.3);
+          position:relative;z-index:2;
+        "></div>
+        <div style="width:2px;height:16px;background:linear-gradient(to bottom,rgba(255,255,255,0.7),rgba(255,255,255,0));"></div>
+        <div class="pin-ring" style="
+          position:absolute;top:-3px;left:50%;transform:translateX(-50%);
+          width:20px;height:20px;border-radius:50%;
+          border:1.5px solid rgba(${p.glow},0.5);
+          animation:pinPulse 2s ease-out infinite;
+          animation-delay:${i*0.15}s;
+        "></div>
+      </div>`;
+
+    el.dataset.idx = i;
+    el.addEventListener('mouseenter', () => showTip(p, el));
+    el.addEventListener('mouseleave', hideTip);
+    overlay.appendChild(el);
+    markerEls.push({ el, p });
+  });
+}
+
+// Update marker positions every frame
+function updateMarkerOverlay() {
+  const wrap = document.getElementById('globe-wrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+
+  markerEls.forEach(({ el, p }) => {
+    // Get the 3D position of this pin on the globe surface,
+    // accounting for current globe rotation
+    const localVec = ll2v(p.lat, p.lng).multiplyScalar(R * 1.015);
+
+    // Apply globe rotation to get world position
+    const euler = new THREE.Euler(rotX, rotY, 0, 'YXZ');
+    const worldVec = localVec.clone().applyEuler(euler);
+
+    // Check if pin is on the visible hemisphere (facing camera = positive Z)
+    // Camera is at (0,0,zoom), so we check if world Z > some threshold
+    const isFront = worldVec.z > -0.05;
+
+    if (!isFront) {
+      el.style.display = 'none';
+      return;
+    }
+
+    // Project to screen
+    const proj = worldVec.clone().project(camera);
+    const sx = (proj.x + 1) / 2 * W;
+    const sy = (-proj.y + 1) / 2 * H;
+
+    // Fade based on dot product (limb = less visible)
+    const dot = worldVec.z;
+    const opacity = Math.min(1, (dot + 0.05) * 6);
+
+    el.style.display = 'block';
+    el.style.left = sx + 'px';
+    el.style.top  = sy + 'px';
+    el.style.opacity = opacity;
+  });
+}
+
+function showTip(p, el) {
+  const tip = document.getElementById('tip');
+  const wrap = document.getElementById('globe-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const tc = p.type==='flood'?'color:#ef4444':p.type==='distress'?'color:#f59e0b':p.type==='resources'?'color:#60a5fa':'color:#a78bfa';
+  tip.style.display='block';
+  tip.style.left=(elRect.left-rect.left+20)+'px';
+  tip.style.top=(elRect.top-rect.top-10)+'px';
+  tip.innerHTML=`
+    <div style="font-weight:700;margin-bottom:5px;${tc}">${p.label}</div>
+    <div style="color:rgba(255,255,255,0.65);line-height:1.65;font-size:11px">${p.detail}</div>
+    <div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.28)">${Math.abs(p.lat).toFixed(3)}°${p.lat>=0?'N':'S'} ${Math.abs(p.lng).toFixed(3)}°${p.lng>=0?'E':'W'}</div>`;
+}
+
+function hideTip() {
+  document.getElementById('tip').style.display='none';
+}
+
+// ── Mouse move ────────────────────────────────────────────────────────────────
+function onMove(e) {
+  if (dragging) {
+    const dx=e.clientX-lastMX, dy=e.clientY-lastMY;
+    targetRotY += dx*0.007;
+    targetRotX = Math.max(-0.7, Math.min(0.7, targetRotX+dy*0.005));
+    lastMX=e.clientX; lastMY=e.clientY;
+  }
+  // Coords HUD
+  const wrap=document.getElementById('globe-wrap');
+  const rect=wrap.getBoundingClientRect();
+  const mx=((e.clientX-rect.left)/rect.width)*2-1;
+  const my=-((e.clientY-rect.top)/rect.height)*2+1;
+  const lng=((-rotY + mx*0.55)*180/Math.PI%360+540)%360-180;
+  const lat=my*52;
+  document.getElementById('coords-hud').textContent=`${Math.abs(lat).toFixed(1)}°${lat>=0?'N':'S'} ${Math.abs(lng).toFixed(1)}°${lng>=0?'E':'W'}`;
+}
+
+// ── Fly-to ────────────────────────────────────────────────────────────────────
+const LOCS = {
+  sindh:   {lat:25.41,  lng:68.37,  z:1.9},
+  dhaka:   {lat:23.8,   lng:90.4,   z:2.0},
+  jakarta: {lat:-6.2,   lng:106.8,  z:2.0},
+  houston: {lat:29.7,   lng:-95.4,  z:2.0},
+  london:  {lat:51.5,   lng:-0.1,   z:2.0},
+  nigeria: {lat:5.0,    lng:6.0,    z:2.1},
+  amazon:  {lat:-3.0,   lng:-60.0,  z:2.0},
+  wuhan:   {lat:30.5,   lng:114.3,  z:2.0},
+  world:   {lat:15,     lng:0,      z:2.9},
+};
+
+window.flyTo = function(key) {
+  const loc = LOCS[key]; if(!loc) return;
+  isRotating = false; updateRotBtn();
+  targetRotY = -loc.lng * Math.PI/180;
+  targetRotX = -loc.lat * Math.PI/180 * 0.45;
+  targetZoom = loc.z;
+};
+
+window.toggleRotation = function() {
+  isRotating = !isRotating; updateRotBtn();
+};
+
+window.setSpeed = function(v) { rotSpd = v * 0.001; };
+
+function updateRotBtn() {
+  const b = document.getElementById('rot-btn');
+  b.innerHTML = isRotating
+    ? '<svg style="width:13px;height:13px;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Auto-rotate: ON'
+    : '<svg style="width:13px;height:13px;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Auto-rotate: OFF';
+  b.className = isRotating ? 'lbtn on' : 'lbtn';
+}
+
+window.toggleLayer = function(key, btn) {
+  layers[key] = !layers[key];
+  btn.classList.toggle('on', layers[key]);
+  if (key === 'atm') { atmMesh.visible = layers[key]; return; }
+  buildMarkerElements();
+};
+
+function onResize() {
+  const wrap=document.getElementById('globe-wrap');
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  camera.aspect=W/H; camera.updateProjectionMatrix();
+  renderer.setSize(W,H);
+}
+
+// ── CSS keyframe for pin pulse ─────────────────────────────────────────────────
+const style = document.createElement('style');
+style.textContent = `
+@keyframes pinPulse {
+  0%   { transform:translateX(-50%) scale(1);   opacity:0.7; }
+  70%  { transform:translateX(-50%) scale(2.4); opacity:0;   }
+  100% { transform:translateX(-50%) scale(1);   opacity:0;   }
+}`;
+document.head.appendChild(style);
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init();
+buildMarkerElements();
+
+})();
+</script>
+</body>
+</html>
